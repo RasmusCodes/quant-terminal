@@ -1,0 +1,61 @@
+# Scheduled public build: discovers the owner's PUBLIC repositories and the live website, re-indexes what changed,
+# exports the read-only terminal and deploys it to GitHub Pages (https://<owner>.github.io/quant-terminal/).
+# Private repositories and local projects never reach this job: it runs in public mode with the workflow token,
+# which cannot read private repositories, and the export fails if its privacy scan finds anything sensitive.
+name: Public terminal
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["rtshf/**", "web/**", "config/**", "requirements.txt", ".github/workflows/public-terminal.yml"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: public-terminal
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Restore the previous index (change detection, alert history)
+        uses: actions/cache@v6
+        with:
+          path: data
+          key: rts-public-${{ github.run_id }}
+          restore-keys: rts-public-
+      - name: Sync public sources
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python -m rtshf --mode public sync --trigger github-actions
+      - name: Tests
+        run: python -m pytest -q tests -p no:cacheprovider
+      - name: Export (privacy-scanned)
+        run: python -m rtshf --mode public export --out site
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,308 @@
+# Classification vocabulary. Generic domain terms only: nothing here names a specific project.
+# Term syntax: "phrase" (weight 1), "phrase^3" (weight 3), "prefix*" (prefix match), "CS:Token" (case-sensitive).
+# A project's category scores come from these terms in its name, description, README, document headings,
+# file names and code imports; the evidence (top terms) is stored with every classification.
+
+categories:
+  quant_trading:
+    label: Quant trading & microstructure
+    tab: quant
+    investment: true
+    subtopics:
+      microstructure:
+        label: HFT & market microstructure
+        terms: ["market microstructure^3", "microstructure^2", "limit order book^3", "order book^2", "matching engine^3", "high-frequency^3", "high frequency trading^3", "CS:HFT^3", "queue position^2", "latency^1", "CS:ITCH^3", "lobster^2", "tick data^2", "price-time priority^3", "exchange simulator^3", "discrete-event^2"]
+      order_routing:
+        label: Smart order routing
+        terms: ["smart order rout*^3", "order router^3", "order routing^3", "venue selection^2", "best execution^2", "fill probability^2", "CS:SOR^2"]
+      market_making:
+        label: Market making
+        terms: ["market making^3", "market-making^3", "market maker^3", "avellaneda^3", "stoikov^3", "inventory risk^2", "quoting^2", "spread capture^2", "adverse selection^2"]
+      stat_arb:
+        label: Statistical arbitrage
+        terms: ["statistical arbitrage^3", "stat arb^3", "statarb^3", "pairs trading^3", "cointegration^3", "mean reversion^2", "mean-reversion^2", "market-neutral^2", "market neutral^2", "residual momentum^3", "kalman^1"]
+      rl_trading:
+        label: Reinforcement-learning trading
+        terms: ["reinforcement learning^3", "reinforcement-learning^3", "CS:PPO^2", "CS:DQN^2", "CS:SAC^1", "policy gradient^2", "trading environment^2", "rl agent*^3"]
+      prediction_markets:
+        label: Prediction markets
+        terms: ["prediction market*^3", "kalshi^3", "polymarket^3", "event contract*^2", "lmsr^3", "binary contract*^2"]
+      sports_betting:
+        label: Sports betting models
+        terms: ["sports betting^3", "sportsbook*^3", "closing line^3", "moneyline^3", "point spread^2", "player props^2", "betting market*^3", "CS:NBA^1", "CS:NFL^1", "elo rating*^1"]
+      relative_value:
+        label: Cross-asset relative value
+        terms: ["relative value^3", "relative-value^3", "cross-asset^2", "basis trade^2", "carry trade^2", "spread trade*^2", "rich/cheap^2"]
+      execution:
+        label: Execution research
+        terms: ["execution^1", "transaction cost*^2", "market impact^2", "implementation shortfall^3", "CS:VWAP^2", "CS:TWAP^2", "slippage^2", "almgren^3", "square-root impact^2"]
+      factors:
+        label: Factor & systematic equity
+        terms: ["factor investing^3", "fama-french^3", "fama french^3", "momentum^1", "quality factor^2", "value factor^2", "profitability premium^3", "cross-sectional^2", "long-short^2", "long/short^2", "smart beta^2"]
+      alpha_combination:
+        label: Alpha & signal combination
+        terms: ["alpha combination^3", "signal combination^3", "combining signals^3", "forecast combination^3", "alpha signal*^2", "information coefficient^3", "CS:IC-weight*^3", "ic-weighted^3", "bayesian model averaging^3", "CS:BMA^2", "elastic net^2", "shrinkage^1", "ensemble^1", "signal weights^2", "alpha research^3"]
+      backtesting:
+        label: Backtesting & validation
+        terms: ["backtest*^2", "walk-forward^2", "out-of-sample^2", "sharpe^1", "drawdown^1", "holdout^1", "systematic trading^3", "trading strateg*^2", "paper trad*^2"]
+
+  derivatives:
+    label: Derivatives, rates & credit
+    tab: markets
+    investment: true
+    subtopics:
+      options_pricing:
+        label: Options pricing
+        terms: ["option pricing^3", "options pricing^3", "black-scholes^3", "black scholes^3", "CS:BSM^3", "binomial tree*^2", "american option*^3", "implied volatility^2", "greeks^2", "exotic option*^2", "barrier contract*^2", "derivatives exchange^3"]
+      vol_surfaces:
+        label: Volatility surfaces
+        terms: ["volatility surface*^3", "vol surface*^3", "CS:SVI^3", "CS:SSVI^3", "CS:SABR^3", "heston^3", "local vol*^2", "volatility smile^3", "skew^1"]
+      vol_forecasting:
+        label: Volatility forecasting
+        terms: ["volatility forecast*^3", "realized volatility^3", "realised volatility^3", "CS:GARCH^3", "CS:HAR^2", "CS:VIX^2", "CS:VVIX^2", "variance risk premium^3", "earnings volatility^2"]
+      options_strategies:
+        label: Options strategies & risk
+        terms: ["straddle*^2", "strangle*^2", "iron condor*^3", "covered call*^2", "variance swap*^3", "options strateg*^3", "delta-hedg*^2", "delta hedg*^2", "portfolio greeks^2"]
+      fixed_income:
+        label: Fixed income & rates
+        terms: ["fixed income^3", "fixed-income^3", "yield curve^3", "treasury^1", "treasuries^2", "duration^1", "convexity^1", "swap spread*^3", "nelson-siegel^3", "term premium^3", "rates^1", "butterfl*^1"]
+      credit:
+        label: Credit & capital structure
+        terms: ["capital structure^3", "capital-structure^3", "credit spread*^3", "recovery rate*^3", "recovery^1", "CS:CDS^3", "high yield^2", "convertible*^2", "senior notes^2", "seniority^2", "distance to default^3", "merton model^3", "default probabilit*^3", "breakeven recovery^3"]
+
+  alt_data:
+    label: Alternative data
+    tab: altdata
+    investment: true
+    subtopics:
+      alt_data:
+        label: Alternative data pipelines
+        terms: ["alternative data^3", "alternative-data^3", "alt-data^3", "alt data^3", "point-in-time^1", "nowcast*^2", "web scrap*^2", "google trends^2", "job posting*^2", "hiring^1", "web traffic^2", "app download*^2", "satellite^1", "import record*^2", "customs^1", "bill of lading^2", "shipment*^1"]
+      procurement:
+        label: Government procurement
+        terms: ["procurement^3", "usaspending^3", "CS:FPDS^3", "sam.gov^3", "government contract*^3", "contract award*^2", "legistar^3", "council approval*^2", "solicitation*^2", "socrata^2"]
+      deal_tracking:
+        label: Deal & commercial-event tracking
+        terms: ["deal tracking^3", "deal-tracking^3", "design win*^3", "commercial event*^3", "contract win*^2", "customer win*^2", "materiality^1"]
+      industrial:
+        label: Industrial intelligence
+        terms: ["industrial intelligence^3", "equipment demand^3", "machinery^1", "construction^1", "mining^1", "dealer inventor*^3", "backlog^1", "rig count*^2", "freight^1"]
+      data_center:
+        label: Data-center infrastructure
+        terms: ["data center*^2", "data-center*^2", "datacenter*^2", "hyperscaler*^2", "neocloud*^3", "colocation^2", "megawatt*^1", "power demand^2", "interconnection^1", "gpu cloud^3"]
+      semis_forecasting:
+        label: Semiconductor revenue forecasting
+        terms: ["revenue forecast*^3", "earnings forecast*^2", "management guidance^2", "guidance^1", "beat^1", "xbrl^2", "8-k^1", "semiconductor*^1"]
+      filings_text:
+        label: Filings & text mining
+        terms: ["sec edgar^2", "edgar^1", "10-k^1", "10-q^1", "form 4^2", "13f^2", "insider purchase*^3", "insider trad*^2", "text mining^2", "risk factor*^1", "loughran^3"]
+
+  equity_research:
+    label: Equity research & valuation
+    tab: research
+    investment: true
+    subtopics:
+      memos:
+        label: Investment memos & theses
+        terms: ["investment memo^3", "investment thesis^3", "price target^3", "short thesis^3", "long thesis^3", "bull case^2", "bear case^2", "base case^1", "variant view^3", "pitch^1", "stock pitch^3", "recommendation^1", "catalyst*^1", "deep dive^2", "stock report^3"]
+      valuation:
+        label: Valuation models
+        terms: ["CS:DCF^3", "discounted cash flow^3", "CS:WACC^3", "terminal value^2", "fair value^2", "intrinsic value^2", "ev/ebitda^2", "comparable compan*^3", "comps^2", "valuation^2", "reverse dcf^3", "sum-of-the-parts^3", "CS:SOTP^3", "operating model^3", "financial model^2"]
+      earnings:
+        label: Earnings analysis
+        terms: ["earnings call*^2", "earnings release*^2", "transcript*^1", "gross margin^1", "operating margin^1", "CS:EPS^1", "consensus^1", "quarterly results^2"]
+      forensics:
+        label: Forensic accounting
+        terms: ["forensic*^3", "m-score^3", "beneish^3", "accrual*^2", "earnings quality^3", "red flag*^2", "fog index^3", "dechow^3", "receivable*^1"]
+      sector:
+        label: Sector & industry research
+        terms: ["CS:TAM^2", "market share^2", "competitive landscape^2", "supply chain^1", "industry structure^2", "end market*^2", "sector research^3"]
+      event_driven:
+        label: Event-driven
+        terms: ["event-driven^3", "event driven^3", "merger arb*^3", "spin-off^2", "spinoff^2", "activist^2", "restructuring^1", "launch event^1"]
+
+  portfolio:
+    label: Portfolio & personal investing
+    tab: portfolio
+    investment: true
+    subtopics:
+      holdings:
+        label: Holdings & performance
+        terms: ["portfolio^1", "holdings^2", "time-weighted return^3", "CS:TWR^3", "brokerage^2", "nordnet^3", "revolut^2", "allocation^1", "rebalanc*^2", "investment tracking^3", "stock screener^2"]
+      risk:
+        label: Portfolio risk
+        terms: ["value at risk^3", "CS:VaR^3", "expected shortfall^3", "CS:CVaR^3", "stress test*^2", "scenario analysis^2", "concentration^1", "factor exposure*^3", "risk budget*^2"]
+      optimization:
+        label: Optimization & sizing
+        terms: ["portfolio optimi*^3", "mean-variance^3", "markowitz^3", "efficient frontier^3", "ledoit^2", "black-litterman^3", "kelly^2", "position sizing^3", "risk parity^3"]
+      personal_finance:
+        label: Personal finance
+        terms: ["personal finance^3", "budget*^1", "savings^1", "net worth^2", "expenses^1", "emergency fund^2"]
+
+  game_theory:
+    label: Game theory & simulation research
+    tab: quant
+    investment: false           # never treated as an investment signal
+    subtopics:
+      poker:
+        label: Poker solvers
+        terms: ["poker^3", "hold'em^3", "holdem^3", "omaha^3", "CS:PLO^3", "CS:NLH^3", "CS:GTO^3", "CS:CFR^3", "counterfactual regret^3", "node lock*^2", "hand history^2"]
+      figgie:
+        label: Figgie & trading games
+        terms: ["figgie^3", "card-trading game^3", "trading game^2"]
+      game_theory:
+        label: Game theory
+        terms: ["game theory^3", "game-theoretic^3", "nash equilibri*^3", "extensive-form^3", "game tree*^3", "information set*^2", "mixed strateg*^2", "blotto^3", "zero-sum^2"]
+      games:
+        label: Games & engines
+        terms: ["chess^2", "stockfish^2", "clash royale^3", "blackjack^2", "card game^2", "win probabilit*^1"]
+
+  career:
+    label: Career & recruiting
+    tab: registry
+    investment: false
+    subtopics:
+      recruiting:
+        label: Recruiting & outreach
+        terms: ["recruiting^3", "internship*^3", "summer analyst^3", "outreach^2", "cold email*^3", "cover letter*^3", "resume^2",
+                "CS:CV^2", "interview prep*^3", "job application*^3", "work authorization^3", "work authorisation^3", "networking^1",
+                "career^2", "visa^1", "alumni^1", "hedge fund recruiting^3"]
+
+  research_tools:
+    label: Research tooling & publishing
+    tab: registry
+    investment: false
+    subtopics:
+      publishing:
+        label: Publishing
+        terms: ["static site^3", "website^1", "publication^1", "rss feed^2", "jinja^2", "github pages^2"]
+      platform:
+        label: Research platform & tooling
+        terms: ["dashboard^1", "pipeline^1", "scheduler^1", "registry^1", "terminal^1", "experiment tracking^3", "experiment registry^3",
+                "run registry^3", "reproducib*^2", "provenance^2", "data version*^2", "manifest^1", "research operating system^3", "lineage^2"]
+
+# Investment themes connect companies, projects and portfolio exposures across categories.
+themes:
+  ai_infrastructure:
+    label: AI infrastructure
+    terms: ["ai infrastructure^3", "ai-infrastructure^3", "data center*^2", "datacenter*^2", "hyperscaler*^2", "CS:GPU*^2", "accelerator*^1", "neocloud*^3", "ai capex^3", "ai compute^3", "ai cloud^2", "inference^1", "training cluster*^2", "CS:HBM^2"]
+  ai_capex:
+    label: AI capex cycle
+    terms: ["ai capex^3", "capex^1", "capital expenditure*^1", "hyperscaler capex^3", "capex guidance^2", "cloud capex^3"]
+  data_center_power:
+    label: Data-center power
+    terms: ["data center power^3", "power demand^3", "grid^1", "interconnection queue*^3", "gas turbine*^3", "aeroderivative*^3", "behind-the-meter^3", "megawatt*^1", "CS:MW^1", "CS:GW^1", "power purchase agreement*^2", "CS:PPA^2", "utility-scale^2", "electricity demand^2"]
+  semiconductor_capex:
+    label: Semiconductor capex
+    terms: ["wafer fab equipment^3", "CS:WFE^3", "semiconductor equipment^3", "fab capacity^2", "foundry capex^3", "lithography^2", "semicap^3", "capex cycle^2", "wafer starts^2", "deposition^1", "etch^1"]
+  semiconductors:
+    label: Semiconductors
+    terms: ["semiconductor*^2", "chipmaker*^2", "foundry^1", "wafer*^1", "analog^1", "memory chip*^2", "CS:DRAM^2", "CS:NAND^2"]
+  optical_networking:
+    label: Optical networking
+    terms: ["optical transceiver*^3", "transceiver*^2", "optical^1", "photonic*^2", "co-packaged optics^3", "CS:CPO^2", "800G^3", "1.6T^3", "CS:DSP^1", "laser*^1", "indium phosphide^3", "silicon photonics^3"]
+  aviation_aerospace:
+    label: Aviation & aero-engines
+    terms: ["aviation^2", "aircraft^2", "aero-engine*^3", "engine shop visit*^3", "CFM56^3", "V2500^3", "CS:MRO^3", "airline*^1", "aerospace^2", "engine leasing^3", "module repair*^3"]
+  streaming_media:
+    label: Streaming & media
+    terms: ["streaming^2", "subscriber*^1", "paid membership*^3", "ad tier^3", "ad-supported^2", "content spend^3", "broadband homes^3", "churn^1", "box office^1"]
+  public_safety_govtech:
+    label: Public safety & govtech
+    terms: ["body camera*^3", "body-worn^3", "taser*^3", "police^2", "law enforcement^3", "public safety^3", "evidence management^3", "dash camera*^2"]
+  consumer_beverages:
+    label: Consumer beverages
+    terms: ["energy drink*^3", "beverage*^2", "retail scanner*^2", "shelf^1", "flavor*^1", "convenience store*^2"]
+  gaming_entertainment:
+    label: Gaming & casinos
+    terms: ["casino*^3", "gaming revenue^3", "macau^3", "las vegas^3", "baccarat^2", "video game*^2", "console*^1", "game launch*^2", "pre-order*^1"]
+  crypto_digital_assets:
+    label: Crypto & digital assets
+    terms: ["bitcoin^3", "crypto*^2", "hashrate^3", "mining fleet^3", "stablecoin*^2", "digital asset*^2"]
+  credit_markets:
+    label: Credit markets
+    terms: ["credit spread*^3", "high yield^2", "convertible note*^3", "default*^1", "recovery^1", "leverage^1", "refinanc*^2", "covenant*^2", "senior secured^3"]
+  rates_macro:
+    label: Rates & macro
+    terms: ["yield curve^3", "treasury yield*^3", "fed funds^3", "inflation^2", "monetary policy^3", "FOMC^3", "rate hike*^2", "recession^2"]
+  volatility_regimes:
+    label: Volatility & regimes
+    terms: ["volatility^1", "CS:VIX^2", "regime*^2", "drawdown*^1", "tail risk^3", "stress^1", "contagion^3", "systemic risk^3"]
+  market_structure:
+    label: Market structure
+    terms: ["market structure^3", "microstructure^3", "order book^2", "exchange rule*^2", "liquidity provision^2", "spread*^1"]
+  prediction_markets:
+    label: Prediction & betting markets
+    terms: ["prediction market*^3", "kalshi^3", "polymarket^3", "sportsbook*^2", "betting^1", "event contract*^2"]
+  consumer_internet:
+    label: Consumer internet & platforms
+    terms: ["advertising^1", "user growth^2", "daily active user*^3", "CS:DAU^2", "marketplace^1", "ride-hailing^3", "delivery^1", "social media^2"]
+  industrials_machinery:
+    label: Industrial equipment
+    terms: ["heavy equipment^3", "construction equipment^3", "mining equipment^3", "dealer inventor*^3", "machinery^2", "rental fleet^2", "port equipment^2", "cargo handling^3"]
+
+# Data sources detected in text and code (alias -> source). Used for provenance and the Alternative Data view.
+data_sources:
+  sec_edgar: {label: SEC EDGAR, kind: filings, aliases: ["sec edgar", "edgar", "data.sec.gov", "companyfacts", "xbrl", "8-k", "10-k", "10-q", "form 4", "13f", "form adv"]}
+  crsp: {label: CRSP, kind: market, aliases: ["crsp"]}
+  compustat: {label: Compustat, kind: fundamentals, aliases: ["compustat"]}
+  wrds: {label: WRDS, kind: vendor, aliases: ["wrds"]}
+  optionmetrics: {label: OptionMetrics, kind: options, aliases: ["optionmetrics", "ivydb"]}
+  yahoo: {label: Yahoo Finance, kind: market, aliases: ["yahoo finance", "yfinance", "query1.finance.yahoo", "query2.finance.yahoo", "yahoo chart"]}
+  fred: {label: FRED, kind: macro, aliases: ["fred", "fredgraph", "alfred"]}
+  ken_french: {label: Ken French data library, kind: factors, aliases: ["ken french", "french data library", "fama-french factors", "mba.tuck.dartmouth.edu"]}
+  cboe: {label: Cboe, kind: options, aliases: ["cboe"]}
+  dolthub: {label: DoltHub, kind: market, aliases: ["dolthub"]}
+  kalshi: {label: Kalshi, kind: prediction_markets, aliases: ["kalshi"]}
+  polymarket: {label: Polymarket, kind: prediction_markets, aliases: ["polymarket"]}
+  lobster: {label: LOBSTER, kind: order_book, aliases: ["lobster"]}
+  nasdaq_itch: {label: Nasdaq TotalView-ITCH, kind: order_book, aliases: ["itch", "totalview"]}
+  bitstamp: {label: Bitstamp, kind: crypto, aliases: ["bitstamp"]}
+  coinbase: {label: Coinbase, kind: crypto, aliases: ["coinbase"]}
+  usaspending: {label: USAspending, kind: procurement, aliases: ["usaspending"]}
+  fpds: {label: FPDS, kind: procurement, aliases: ["fpds"]}
+  sam_gov: {label: SAM.gov, kind: procurement, aliases: ["sam.gov"]}
+  socrata: {label: Socrata open data, kind: procurement, aliases: ["socrata"]}
+  legistar: {label: Legistar, kind: procurement, aliases: ["legistar"]}
+  census: {label: US Census, kind: trade, aliases: ["census bureau", "api.census.gov", "intltrade"]}
+  bls: {label: BLS, kind: macro, aliases: ["bls api", "bureau of labor statistics"]}
+  eia: {label: EIA, kind: energy, aliases: ["eia"]}
+  bts: {label: BTS TranStats, kind: aviation, aliases: ["transtats", "t-100", "form 41"]}
+  faa: {label: FAA registry, kind: aviation, aliases: ["faa registry", "faa"]}
+  google_trends: {label: Google Trends, kind: alt, aliases: ["google trends"]}
+  reddit: {label: Reddit (Arctic Shift), kind: alt, aliases: ["arctic shift", "reddit"]}
+  wikimedia: {label: Wikimedia pageviews, kind: alt, aliases: ["wikimedia", "pageviews"]}
+  finra: {label: FINRA (TRACE, short interest), kind: credit, aliases: ["finra", "trace"]}
+  treasury: {label: US Treasury yield curve, kind: rates, aliases: ["home.treasury.gov", "par yield curve", "treasury par curve"]}
+  ecb: {label: ECB, kind: fx, aliases: ["ecb", "data-api.ecb.europa.eu"]}
+  lseg: {label: LSEG / Refinitiv, kind: vendor, aliases: ["lseg", "refinitiv", "eikon"]}
+  capiq: {label: S&P Capital IQ, kind: vendor, aliases: ["capiq", "capital iq"]}
+  bloomberg: {label: Bloomberg, kind: vendor, aliases: ["bloomberg terminal"]}
+  damodaran: {label: Damodaran data, kind: valuation, aliases: ["damodaran"]}
+  un_comtrade: {label: UN Comtrade, kind: trade, aliases: ["comtrade"]}
+  cninfo: {label: CNINFO, kind: filings, aliases: ["cninfo"]}
+  importyeti: {label: ImportYeti, kind: trade, aliases: ["importyeti"]}
+  usitc: {label: USITC HTS, kind: trade, aliases: ["usitc", "hts.usitc.gov"]}
+  wayback: {label: Wayback Machine, kind: alt, aliases: ["wayback machine", "web.archive.org"]}
+  greenhouse: {label: Greenhouse job boards, kind: hiring, aliases: ["greenhouse"]}
+  sportsdataverse: {label: sportsdataverse / nflverse, kind: sports, aliases: ["sportsdataverse", "nflverse"]}
+  chess_com: {label: chess.com / lichess, kind: games, aliases: ["chess.com", "lichess"]}
+  nordnet: {label: Nordnet (broker export), kind: portfolio, aliases: ["nordnet"]}
+  revolut: {label: Revolut (broker statement), kind: portfolio, aliases: ["revolut"]}
+  tdlr: {label: TDLR TABS, kind: construction, aliases: ["tdlr"]}
+  esri_wayback: {label: Esri Wayback imagery, kind: alt, aliases: ["esri wayback", "esri"]}
+
+# Code imports that hint at categories (module -> category, weight).
+imports:
+  QuantLib: [derivatives, 3]
+  py_vollib: [derivatives, 3]
+  vollib: [derivatives, 2]
+  arch: [derivatives, 2]
+  cvxpy: [portfolio, 2]
+  statsmodels: [quant_trading, 1]
+  stable_baselines3: [quant_trading, 3]
+  gymnasium: [quant_trading, 1]
+  torch: [quant_trading, 0.5]
+  yfinance: [portfolio, 1]
+  openpyxl: [equity_research, 1]
+  pypdf: [alt_data, 0.5]

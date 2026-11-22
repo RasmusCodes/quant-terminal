@@ -1,0 +1,6 @@
+# Optional manual overrides (public-safe). Machine-specific or private overrides go under `overrides:` in config/local.yaml.
+# projects:
+#   <slug>: {category: quant_trading, relevance: investment, summary: "...", name: "..."}
+# Nothing here is needed for discovery; use it only to correct a classification you disagree with.
+projects:
+  quant-terminal: {category: research_tools, relevance: tooling}

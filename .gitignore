@@ -1,0 +1,10 @@
+/data/*
+!/data/.rtsignore
+/.venv/
+/site/
+__pycache__/
+*.pyc
+.pytest_cache/
+/config/local.yaml
+*.log
+*.tmp
