@@ -8,6 +8,41 @@ from .taxonomy import Taxonomy
 from .util import loads
 
 
+def inventory_markdown(settings) -> str:
+    """The discovery inventory as markdown (private: it names private repositories and local folders)."""
+    db = DB(settings.db_path)
+    tax = Taxonomy(settings.taxonomy)
+    run = db.one("SELECT * FROM sync_runs WHERE status IN ('ok','partial') ORDER BY id DESC LIMIT 1")
+    lines = ["# Project inventory", "",
+             f"Generated from sync #{run['id']} ({run['finished_at']}). Every row was found automatically." if run else "No sync yet.", ""]
+    src = Counter((r["kind"], r["visibility"]) for r in db.all("SELECT kind, visibility FROM sources"))
+    lines.append("Sources: " + ", ".join(f"{k} {v}: {n}" for (k, v), n in sorted(src.items())))
+    rel = Counter(r["relevance"] for r in db.all("SELECT relevance FROM projects"))
+    lines.append("Projects by relevance: " + ", ".join(f"{k}: {v}" for k, v in rel.most_common()))
+    lines.append("")
+    order = ["investment", "pending", "game_theory", "publication", "tooling", "career", "reference", "not_relevant", "unknown"]
+    for relv in order:
+        rows = db.all("""SELECT p.*, (SELECT COUNT(*) FROM documents d WHERE d.project_id=p.id AND d.status='active' AND d.doc_type!='result') docs,
+                         (SELECT COUNT(*) FROM experiments e WHERE e.project_id=p.id AND e.status='active') exps,
+                         (SELECT COUNT(*) FROM theses t WHERE t.project_id=p.id AND t.status='active') th,
+                         (SELECT group_concat(kind || ':' || visibility, ' ') FROM sources s WHERE s.project_id=p.id) src
+                         FROM projects p WHERE p.relevance=? ORDER BY p.category, p.slug""", (relv,))
+        if not rows:
+            continue
+        lines += [f"## {relv.replace('_', ' ').title()} ({len(rows)})", "",
+                  "| Project | Area | Topics | Sources | Docs | Experiments | Theses | Summary |", "|---|---|---|---|---|---|---|---|"]
+        for p in rows:
+            subs = ", ".join(s["label"] for s in (loads(p["subtopics"], []) or [])[:3])
+            summ = (p["summary"] or "").replace("|", "/").replace("\n", " ")[:160]
+            lines.append(f"| {p['name']} | {tax.category_label(p['category'] or '')} | {subs} | {p['src'] or ''} | {p['docs']} | {p['exps']} | {p['th']} | {summ} |")
+        lines.append("")
+    lines += ["## Theses (active)", "", "| Ticker | Call | Target | Price then | Project | Document |", "|---|---|---|---|---|---|"]
+    for t in db.all("""SELECT t.*, p.slug, d.path FROM theses t LEFT JOIN projects p ON p.id=t.project_id LEFT JOIN documents d ON d.id=t.document_id
+                       WHERE t.status='active' ORDER BY t.symbol"""):
+        lines.append(f"| {t['symbol']} | {t['rating']} | {t['target_price'] or ''} | {t['price_at_thesis'] or ''} | {t['slug']} | {t['path']} |")
+    return "\n".join(lines) + "\n"
+
+
 def status_text(settings) -> str:
     db = DB(settings.db_path)
     tax = Taxonomy(settings.taxonomy)

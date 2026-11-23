@@ -36,6 +36,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--name", default=None)
     p.add_argument("--kind", default="paper", choices=["paper", "real", "game"])
     sub.add_parser("health", help="sync health as JSON")
+    p = sub.add_parser("inventory", help="write the project inventory as markdown (private: names private repositories)")
+    p.add_argument("--out", default=None, help="default: data/<mode>/reports/INVENTORY.md")
     args = ap.parse_args(argv)
     setup_logging("DEBUG" if args.verbose else "INFO")
     settings = config.load(args.mode, args.data_dir)
@@ -86,6 +88,14 @@ def main(argv: list[str] | None = None) -> int:
         db = DB(settings.db_path)
         res = importers.import_csv_file(db, args.csv, args.portfolio, name=args.name, kind=args.kind)
         print(json.dumps(res, indent=1))
+        return 0
+    if args.cmd == "inventory":
+        from pathlib import Path
+        from .report import inventory_markdown
+        out = Path(args.out) if args.out else settings.data_dir / "reports" / "INVENTORY.md"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(inventory_markdown(settings), encoding="utf-8")
+        print(out)
         return 0
     if args.cmd == "health":
         from .db import DB
