@@ -70,6 +70,8 @@ class Views:
         d["models"] = rows_to_dicts(self.db.all("SELECT id, name, path, model_type, symbol, outputs, modified FROM financial_models WHERE project_id=?",
                                                 (p["id"],)), ["outputs"])
         d["strategies"] = rows_to_dicts(self.db.all("SELECT key, name, family, description, costs_modeled, first_date, last_date FROM strategies WHERE project_id=?", (p["id"],)))
+        d["ml_models"] = rows_to_dicts(self.db.all("SELECT name, kind, framework, artifacts, modified FROM models WHERE project_id=? ORDER BY artifacts DESC",
+                                                   (p["id"],)))
         d["companies"] = rows_to_dicts(self.db.all("""SELECT e.symbol, e.name, pe.mentions, pe.documents, round(pe.salience,3) AS salience
                                                      FROM project_entities pe JOIN entities e ON e.id=pe.entity_id WHERE pe.project_id=? AND e.kind='company'
                                                      ORDER BY pe.salience DESC LIMIT 25""", (p["id"],)))
@@ -192,7 +194,12 @@ class Views:
                                            p.slug AS project, d.url, d.visibility FROM financial_models m LEFT JOIN projects p ON p.id=m.project_id
                                            LEFT JOIN documents d ON d.id=m.document_id""" + (" WHERE d.visibility='public'" if self.public else "")),
                             ["outputs", "assumptions", "previous_outputs"])
-        return {"financial": fin, "strategies": rows_to_dicts(self.db.all("SELECT s.*, p.slug AS project FROM strategies s LEFT JOIN projects p ON p.id=s.project_id"))}
+        ml = rows_to_dicts(self.db.all("""SELECT m.key, m.kind, m.name, m.framework, m.artifacts, m.modified, m.meta, p.slug AS project, p.visibility
+                                          FROM models m LEFT JOIN projects p ON p.id=m.project_id ORDER BY m.modified DESC"""), ["meta"])
+        if self.public:
+            ml = [m for m in ml if m.get("visibility") == "public"]
+        return {"financial": fin, "ml": ml,
+                "strategies": rows_to_dicts(self.db.all("SELECT s.*, p.slug AS project FROM strategies s LEFT JOIN projects p ON p.id=s.project_id"))}
 
     def signals(self) -> dict:
         from . import signals as SG
@@ -294,7 +301,9 @@ class Views:
                 return (-int(bool(e["oos"])), -abs(m.get("t_stat", 0) or 0), (m.get("p_value") if m.get("p_value") is not None else 1))
             out["experiments"] = sorted(allx, key=rank)[:2500]       # the most informative results for the table
             out["experiments_total"] = len(allx)
-            out["strategies"] = self.models()["strategies"]
+            reg = self.models()
+            out["strategies"] = reg["strategies"]
+            out["ml_models"] = reg["ml"]
             out["signals"] = self.signals()
         elif name == "altdata":
             out["data_sources"] = rows_to_dicts(self.db.all(f"""SELECT e.key, e.name, COUNT(DISTINCT pe.project_id) projects, SUM(pe.mentions) mentions,

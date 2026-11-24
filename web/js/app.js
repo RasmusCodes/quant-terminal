@@ -55,11 +55,12 @@ async function statusbar() {
     const o = await get("/overview");
     const ls = o.last_sync || {};
     const st = ls.status === "ok" ? "sd-ok" : ls.status === "partial" ? "sd-warn" : ls.status === "failed" ? "sd-bad" : "sd-idle";
+    const when = ls.status === "running" ? `started ${ago(ls.started_at)}` : ago(ls.finished_at);
     const nNew = (o.alerts || []).filter((a) => a.status === "new").length;
     $("#alerts-count").textContent = nNew;
     $("#alerts-dot").classList.toggle("on", nNew > 0);
     $("#mode-badge").textContent = STATIC ? "public" : o.mode;
-    $("#statusbar").innerHTML = `<span><span class="status-dot ${st}"></span>sync ${esc(ls.status || "never")} · ${esc(ago(ls.finished_at))}</span>
+    $("#statusbar").innerHTML = `<span><span class="status-dot ${st}"></span>sync ${esc(ls.status || "never")} · ${esc(when)}</span>
       <span>${fmt(o.counts.projects, "int")} projects</span><span>${fmt(o.counts.documents, "int")} documents</span>
       <span>${fmt(o.counts.findings, "int")} findings</span><span>${fmt(o.counts.experiments, "int")} experiments</span>
       <span>${fmt(o.counts.theses, "int")} theses</span><span>${fmt(o.counts.signals, "int")} signals</span>
@@ -243,6 +244,9 @@ async function quant() {
     { key: "costs_modeled", label: "Costs", render: (s) => (s.costs_modeled ? "modelled" : "–") }, { key: "first_date", label: "From", render: (s) => date(s.first_date) },
     { key: "last_date", label: "To", render: (s) => date(s.last_date) }, { key: "description", label: "Description", render: (s) => `<span class="clip">${esc(s.description || "")}</span>` }],
     { empty: "No strategy registry files found." }), { cls: "c12", flush: true, scroll: true });
+  html += panel("Model registry (saved artefacts)", table(d.ml_models || [], [{ key: "project", label: "Project" }, { key: "name", label: "Folder", render: (m) => `<span class="mono">${esc(m.name)}</span>` },
+    { key: "kind", label: "Kind" }, { key: "artifacts", label: "Files", num: true }, { key: "modified", label: "Updated", render: (m) => date(m.modified) }],
+    { empty: "No saved model files found." }), { cls: "c12", flush: true, scroll: true });
   html += panel("Signal registry", signalTable(d.signals.registry), { cls: "c12", flush: true, scroll: true });
   html += panel("Projects", projectCards(d.projects), { cls: "c12" });
   main.innerHTML = html + "</div>";
@@ -319,7 +323,8 @@ async function portfolio([key]) {
   if (!key) { main.innerHTML = html + '<div class="empty">No portfolios yet. Create a paper portfolio or import a CSV below.</div>' + paperForms(); wirePaper(); return; }
   const d = await get(`/portfolios/${encodeURIComponent(key)}`, { fresh: true });
   const H = d.holdings, perf = d.performance || {};
-  html += `<div class="kpis">${kpi("Positions", fmt(H.holdings.length, "int"))}${kpi("Total return", fmt(perf.total_return, "spct"), perf.start ? `since ${perf.start}` : "")}
+  const cash = Object.entries(H.cash || {}).filter(([, v]) => v).map(([k, v]) => `${esc(k)} ${fmt(v, "money")}`).join(" · ");
+  html += `<div class="kpis">${kpi("Positions", fmt(H.holdings.length, "int"), cash ? `cash: ${cash}` : "")}${kpi("Total return", fmt(perf.total_return, "spct"), perf.start ? `since ${perf.start}` : "")}
     ${kpi("CAGR", fmt(perf.cagr, "spct"))}${kpi("Volatility", fmt(perf.volatility, "pct"))}${kpi("Max drawdown", fmt(perf.max_drawdown, "spct"), perf.max_drawdown_from ? `${perf.max_drawdown_from} → ${perf.max_drawdown_to}` : "")}
     ${perf.benchmark ? kpi(`Benchmark (${esc(perf.benchmark.name || "")})`, fmt(perf.benchmark.total_return, "spct"), perf.beta !== undefined ? `beta ${fmt(perf.beta, "num", 2)}` : "") : ""}</div><div class="grid">`;
   html += panel("Performance", `<div id="pf-perf"></div><p class="note">${esc(perf.method || perf.reason || "")}</p>`, { cls: "c8" });
@@ -477,6 +482,7 @@ async function openProject(slug) {
     ${(cls.flags || []).length ? `<h3>Research-practice checks</h3>${cls.flags.map((f) => `<div class="alert ${f.status === "acknowledged" ? "info" : "warning"}"><div class="t">${esc(f.flag.replace(/_/g, " "))} · ${esc(f.status)}</div><div class="dtl">${esc(f.detail)}</div></div>`).join("")}` : ""}
     ${p.theses.length ? `<h3>Theses</h3>${table(p.theses, thesisCols.slice(0, 6), { onRow: openThesis })}` : ""}
     ${p.models.length ? `<h3>Models</h3>${table(p.models, [{ key: "name", label: "Model" }, { key: "model_type", label: "Type" }, { key: "outputs", label: "Outputs", render: (m) => (m.outputs || []).slice(0, 4).map((o) => `<span class="pill mono">${esc(o.key)} ${fmt(o.value, "num", 2)}</span>`).join("") }])}` : ""}
+    ${(p.ml_models || []).length ? `<h3>Saved model artefacts</h3>${table(p.ml_models, [{ key: "name", label: "Folder", render: (m) => `<span class="mono">${esc(m.name)}</span>` }, { key: "kind", label: "Kind" }, { key: "artifacts", label: "Files", num: true }, { key: "modified", label: "Updated", render: (m) => date(m.modified) }])}` : ""}
     <h3>Key findings</h3>${table(p.findings.slice(0, 25), findingCols, { empty: "No findings extracted." })}
     ${p.experiments.length ? `<h3>Experiments (${p.experiments.length})</h3>${table(p.experiments, expCols.slice(1), { onRow: openExperiment, max: 80 })}` : ""}
     ${p.companies.length ? `<h3>Companies</h3><div>${p.companies.map((c) => `<a class="pill" href="#/company/${encodeURIComponent(c.symbol)}">${esc(c.symbol)} · ${c.mentions}</a>`).join("")}</div>` : ""}

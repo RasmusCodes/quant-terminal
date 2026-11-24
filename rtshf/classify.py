@@ -168,6 +168,8 @@ def profile_project(db: DB, tax: Taxonomy, project_id: int, overrides: dict, roo
     flags = X.practice_flags(readme_text + "\n" + report_text + "\n" + page_text, code_texts, hyps) if relevance == "investment" else []
     # status from activity
     status = _status(last_activity, len(files), proj["first_seen"])
+    if not files and docs:
+        status = "published"            # known only from its published page (no repository or folder visible)
     if relevance == "pending" and status not in ("empty",):
         status = "in_progress"
     summary = _summary(page, page_text, descs, readme_text, db, project_id)
@@ -207,9 +209,38 @@ def profile_project(db: DB, tax: Taxonomy, project_id: int, overrides: dict, roo
     if ov or manifest:
         fields["override"] = dumps({**({"manifest": manifest} if manifest else {}), **ov})
     db.update("projects", project_id, fields)
+    refresh_model_registry(db, project_id, proj["slug"])
     _contextualise_result_experiments(db, project_id, readme_text + "\n" + report_text, flags)
     db.commit()
     return fields
+
+
+ARTIFACT_KIND = {".pt": "PyTorch weights", ".pth": "PyTorch weights", ".pkl": "pickled model/object", ".joblib": "joblib model",
+                 ".onnx": "ONNX model", ".npz": "NumPy arrays", ".h5": "HDF5/Keras", ".cbm": "CatBoost model", ".lgb": "LightGBM model"}
+
+
+def refresh_model_registry(db: DB, project_id: int, slug: str) -> int:
+    """Group saved model artifacts by folder and type into model-registry entries (one row per folder and kind)."""
+    import datetime as dt
+    groups: dict = {}
+    for f in db.all("""SELECT f.path, f.size, f.mtime FROM file_index f JOIN sources s ON s.id=f.source_id
+                       WHERE s.project_id=? AND f.role='artifact' AND f.status='active'""", (project_id,)):
+        folder, _, name = f["path"].rpartition("/")
+        ext = Path(name).suffix.lower()
+        top = "/".join(folder.split("/")[:3]) or "."
+        g = groups.setdefault((top, ext), {"n": 0, "size": 0, "mtime": 0.0, "examples": []})
+        g["n"] += 1
+        g["size"] += f["size"] or 0
+        g["mtime"] = max(g["mtime"], f["mtime"] or 0)
+        if len(g["examples"]) < 3:
+            g["examples"].append(f["path"])
+    db.execute("DELETE FROM models WHERE project_id=?", (project_id,))
+    for (folder, ext), g in groups.items():
+        db.insert("models", {"key": f"{slug}:{folder}:{ext}", "project_id": project_id, "kind": ARTIFACT_KIND.get(ext, ext),
+                             "name": folder, "path": folder, "framework": ext.lstrip("."), "artifacts": g["n"],
+                             "modified": dt.datetime.fromtimestamp(g["mtime"], dt.timezone.utc).replace(microsecond=0).isoformat() if g["mtime"] else None,
+                             "meta": dumps({"bytes": g["size"], "examples": g["examples"]}), "first_seen": now_iso(), "last_seen": now_iso()})
+    return len(groups)
 
 
 def _manifest(db: DB, sources, root_of_source) -> dict:
@@ -302,6 +333,8 @@ def _summary(page, page_text, descs, readme_text, db, project_id) -> str:
             return d[:500]
     for para in re.split(r"\n\s*\n", readme_text):
         p = para.strip()
+        if re.match(r"^(?:[-*•]|\d{1,2}[.)])\s", p):      # a list is not a summary
+            continue
         if len(p) > 70 and not p.startswith(("#", "|", "```", "!", "<", "*Status", "> ")):
             p = re.sub(r"[*_`]", "", re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", p))
             return re.sub(r"\s+", " ", p)[:500]

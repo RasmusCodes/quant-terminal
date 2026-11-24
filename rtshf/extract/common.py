@@ -6,7 +6,7 @@ import re
 # ----------------------------------------------------------------------------------------- metrics
 METRIC_KEYS = {
     "sharpe": r"sharpe(?:_?ratio)?", "sortino": r"sortino", "calmar": r"calmar", "alpha": r"alpha(?:_ann(?:ual)?)?",
-    "t_stat": r"t_?stat(?:istic)?|tstat|t_value|t", "p_value": r"p_?val(?:ue)?|pval|p", "ic": r"ic|rank_?ic|mean_?ic",
+    "t_stat": r"t_?stat(?:istic)?|tstat|t_value|nw_t|t_nw", "p_value": r"p_?val(?:ue)?|pval", "ic": r"ic|rank_?ic|mean_?ic",
     "ir": r"ir|info(?:rmation)?_?ratio", "hit_rate": r"hit_?rate|win_?rate|accuracy_?dir", "cagr": r"cagr",
     "ann_return": r"ann(?:ual(?:ized|ised)?)?_?ret(?:urn)?|mean_?ret(?:urn)?_?ann|return_?ann", "total_return": r"total_?ret(?:urn)?|cum(?:ulative)?_?ret(?:urn)?",
     "max_drawdown": r"max_?dd|max_?drawdown|mdd|drawdown", "volatility": r"vol(?:atility)?(?:_ann)?|ann_?vol|sd|std",
@@ -18,8 +18,15 @@ METRIC_KEY_RE = {k: re.compile(rf"^(?:{v})$", re.I) for k, v in METRIC_KEYS.item
 RETURN_METRICS = {"sharpe", "sortino", "calmar", "alpha", "cagr", "ann_return", "total_return", "pnl", "ir"}
 
 
-def metric_name(key: str) -> str | None:
-    k = re.sub(r"[\s\-./()%]+", "_", str(key).strip().lower()).strip("_")
+def metric_name(key: str, table: bool = False) -> str | None:
+    """Map a column/key name to a metric. Bare one-letter names are ambiguous: in a results file 't' or 'T' is usually a
+    sample length or a time index, so they count as statistics only as lower-case table headers ('t', 'p')."""
+    raw = str(key).strip()
+    if raw == "T" or raw == "N":
+        return "n_obs"
+    if raw in ("t", "p"):
+        return ("t_stat" if raw == "t" else "p_value") if table else None
+    k = re.sub(r"[\s\-./()%]+", "_", raw.lower()).strip("_")
     k = re.sub(r"_(net|gross|oos|is|test|train|mean|median|est|estimate|annual|ann|pct|bps)$", "", k)
     for name, rx in METRIC_KEY_RE.items():
         if rx.match(k):
@@ -65,7 +72,7 @@ def text_metrics(text: str) -> dict[str, float]:
         v = to_float(m.group(1))
         if v is None:
             continue
-        if name == "t_stat" and not -60 < v < 60:
+        if name == "t_stat" and not -40 <= v <= 40:
             continue
         if name == "sharpe" and not -10 < v < 20:
             continue
@@ -111,6 +118,7 @@ def statements(text: str) -> list[tuple[int, str]]:
 
 
 def _clean_md(s: str) -> str:
+    s = s.replace("\\*", "").replace("\\_", "_")
     s = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", s)
     s = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", s)
     s = re.sub(r"(\*\*|__|`)", "", s)

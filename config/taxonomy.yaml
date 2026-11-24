@@ -188,10 +188,12 @@ themes:
     terms: ["ai infrastructure^3", "ai-infrastructure^3", "data center*^2", "datacenter*^2", "hyperscaler*^2", "CS:GPU*^2", "accelerator*^1", "neocloud*^3", "ai capex^3", "ai compute^3", "ai cloud^2", "inference^1", "training cluster*^2", "CS:HBM^2"]
   ai_capex:
     label: AI capex cycle
-    terms: ["ai capex^3", "capex^1", "capital expenditure*^1", "hyperscaler capex^3", "capex guidance^2", "cloud capex^3"]
+    terms: ["ai capex^3", "hyperscaler capex^3", "cloud capex^3", "ai spending^2", "ai investment*^2", "data center capex^3", "gpu purchases^2", "capex for ai^3"]
   data_center_power:
     label: Data-center power
-    terms: ["data center power^3", "power demand^3", "grid^1", "interconnection queue*^3", "gas turbine*^3", "aeroderivative*^3", "behind-the-meter^3", "megawatt*^1", "CS:MW^1", "CS:GW^1", "power purchase agreement*^2", "CS:PPA^2", "utility-scale^2", "electricity demand^2"]
+    terms: ["data center power^3", "data-center power^3", "power demand^3", "power grid^2", "electric grid^2", "grid power^2", "grid connection*^2", "grid interconnection^3",
+            "interconnection queue*^3", "gas turbine*^3", "aeroderivative*^3", "behind-the-meter^3", "megawatt*^1", "CS:MW^1", "CS:GW^1",
+            "power purchase agreement*^2", "CS:PPA^2", "utility-scale^2", "electricity demand^2", "time-to-power^3"]
   semiconductor_capex:
     label: Semiconductor capex
     terms: ["wafer fab equipment^3", "CS:WFE^3", "semiconductor equipment^3", "fab capacity^2", "foundry capex^3", "lithography^2", "semicap^3", "capex cycle^2", "wafer starts^2", "deposition^1", "etch^1"]

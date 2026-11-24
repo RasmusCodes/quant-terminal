@@ -136,9 +136,13 @@ class Answerer:
         return {r[0] for r in self.db.all(f"SELECT id FROM entities WHERE key IN ({','.join('?' * len(keys))})", keys)} if keys else set()
 
     def _theses(self, sym: str) -> list:
+        """Active calls first; within them the most complete statement (structured, with target and price) first."""
         return self.db.all("""SELECT t.*, p.slug, p.name AS pname, d.title, d.url, d.path, d.doc_type FROM theses t
                               LEFT JOIN projects p ON p.id=t.project_id LEFT JOIN documents d ON d.id=t.document_id
-                              WHERE t.symbol=? ORDER BY CASE t.status WHEN 'active' THEN 0 ELSE 1 END, t.thesis_date DESC""", (sym,))
+                              WHERE t.symbol=? AND t.status IN ('active','superseded')
+                              ORDER BY CASE t.status WHEN 'active' THEN 0 ELSE 1 END,
+                                       CASE WHEN t.method='structured' THEN 0 ELSE 1 END,
+                                       (t.target_price IS NULL) + (t.price_at_thesis IS NULL), t.thesis_date DESC""", (sym,))
 
     @staticmethod
     def _thesis_line(t) -> str:
@@ -166,8 +170,9 @@ class Answerer:
         eid = self.db.scalar("SELECT id FROM entities WHERE key=?", (f"company:{sym}",))
         ev, lines = [], []
         projects = self.db.all("""SELECT p.slug, p.name, p.category, pe.mentions, pe.documents, pe.salience FROM project_entities pe
-                                  JOIN projects p ON p.id=pe.project_id WHERE pe.entity_id=? ORDER BY pe.salience DESC, pe.mentions DESC""",
-                               (eid,)) if eid else []
+                                  JOIN projects p ON p.id=pe.project_id WHERE pe.entity_id=?
+                                  AND COALESCE(p.relevance,'') IN ('investment','pending','publication','game_theory')
+                                  ORDER BY pe.salience DESC, pe.mentions DESC""", (eid,)) if eid else []
         main = [p for p in projects if p["salience"] >= 0.25]
         minor = [p for p in projects if p["salience"] < 0.25]
         if not projects:
@@ -265,7 +270,8 @@ class Answerer:
             tids = self._entity_ids([f"theme:{k}" for k in keys])
             rows = self.db.all(f"""SELECT p.id, p.slug, p.name, p.category, SUM(pe.mentions) m, SUM(pe.documents) d FROM project_entities pe
                                    JOIN projects p ON p.id=pe.project_id WHERE pe.entity_id IN ({','.join('?' * len(tids)) or "''"})
-                                   GROUP BY p.id HAVING m >= 3 ORDER BY m DESC""", list(tids))
+                                   AND COALESCE(p.relevance,'') IN ('investment','pending','publication')
+                                   GROUP BY p.id HAVING m >= 5 ORDER BY m DESC""", list(tids))
             lines.append(f"Projects whose documents discuss **{self.tax.theme_label(ents['themes'][0])}**, by number of mentions:")
             for r in rows[:15]:
                 psg = self._passages(q, 1, project_ids={r["id"]}, entity_ids=tids)
@@ -400,29 +406,42 @@ class Answerer:
     def h_exposure(self, q, ents):
         from .portfolio import analytics as A
         ev, lines = [], []
-        keys = THEME_EXPAND.get(ents["themes"][0], [ents["themes"][0]]) if ents["themes"] else []
+        asked = ents["themes"][0] if ents["themes"] else None
+        keys = [asked] + [k for k in THEME_EXPAND.get(asked, []) if k != asked] if asked else []
         syms = set(ents["companies"])
         for p in self.db.all("SELECT * FROM portfolios"):
             H = A.holdings(self.db, dict(p))
-            rows = []
+            per_theme = {}
             for h in H["holdings"]:
-                sec = self.db.one("SELECT themes, name FROM securities WHERE symbol=?", (h["symbol"],))
+                sec = self.db.one("SELECT themes FROM securities WHERE symbol=?", (h["symbol"],))
                 th = loads(sec["themes"], {}) if sec else {}
-                hit = [f"{k}:{th[k]}" for k in keys if k in th] if keys else ([h["symbol"]] if h["symbol"] in syms else [])
-                if hit:
-                    rows.append((h, hit))
-            total = sum((h.get("weight") or 0) for h, _ in rows)
-            label = ", ".join(self.tax.theme_label(k) for k in keys) if keys else ", ".join(syms)
-            if rows:
-                lines.append(f"\n**{p['name']}**: {total * 100:.1f}% of the book is exposed to {label}")
-                for h, hit in sorted(rows, key=lambda x: -abs(x[0].get("weight") or 0)):
-                    lines.append(f"- {h['symbol']} {(h.get('weight') or 0) * 100:.1f}% ({'; '.join(hit)}) "
-                                 + self._cite(ev, _ev("position", f"{p['name']} holds {h['symbol']} at {(h.get('weight') or 0) * 100:.1f}% ({'; '.join(hit)})",
-                                                      title=p["name"], claim_type="observed_fact")))
-            else:
-                lines.append(f"\n**{p['name']}**: no holding is tagged with {label}.")
-        lines.insert(0, "Exposure = portfolio weight of holdings whose security-master entry carries the theme (role in brackets: "
-                        "supplier/operator/subject/beneficiary/spender). Roles are declared reference data, editable in config/securities.yaml.")
+                for k in (keys or []):
+                    if k in th:
+                        per_theme.setdefault(k, []).append((h, th[k]))
+                if not keys and h["symbol"] in syms:
+                    per_theme.setdefault(h["symbol"], []).append((h, "held"))
+            lines.append(f"\n**{p['name']}**")
+            if not per_theme:
+                lines.append(f"- nothing in this book is tagged with {', '.join(self.tax.theme_label(k) for k in keys) or ', '.join(syms)}.")
+                continue
+            for k, rows in per_theme.items():
+                gross = sum(abs(h.get("weight") or 0) for h, _ in rows)
+                net = sum((h.get("weight") or 0) for h, _ in rows)
+                tag = "directly" if k == asked else "through the broader theme"
+                lines.append(f"- **{self.tax.theme_label(k) if k in self.tax.themes else k}** ({tag}): gross {gross * 100:.1f}%, net {net * 100:+.1f}%")
+                for h, role in sorted(rows, key=lambda x: -abs(x[0].get("weight") or 0)):
+                    txt = f"{p['name']} holds {h['symbol']} at {(h.get('weight') or 0) * 100:+.1f}% ({role})"
+                    lines.append(f"  - {h['symbol']} {(h.get('weight') or 0) * 100:+.1f}% ({role}) "
+                                 + self._cite(ev, _ev("position", txt, title=p["name"], claim_type="observed_fact")))
+        if keys:
+            tids = self._entity_ids([f"theme:{asked}"])
+            res = self.db.all(f"""SELECT p.name, SUM(pe.mentions) m FROM project_entities pe JOIN projects p ON p.id=pe.project_id
+                                  WHERE pe.entity_id IN ({','.join('?' * len(tids)) or "''"}) AND p.relevance='investment'
+                                  GROUP BY p.id HAVING m >= 5 ORDER BY m DESC LIMIT 6""", list(tids))
+            if res:
+                lines.append("\nResearch that covers the theme: " + ", ".join(f"{r['name']} ({r['m']} mentions)" for r in res))
+        lines.insert(0, "Exposure = portfolio weight of holdings whose security-master entry carries the theme; the role (supplier, "
+                        "operator, subject, beneficiary, spender) is declared reference data in config/securities.yaml. Shorts count negative.")
         return {"answer": "\n".join(lines), "evidence": ev}
 
     def h_cross_projects(self, q, ents):
@@ -445,29 +464,54 @@ class Answerer:
     def h_predictive(self, q, ents):
         rows = self.db.all("""SELECT e.*, p.slug, p.name AS pname, d.url, d.path, d.title FROM experiments e LEFT JOIN projects p ON p.id=e.project_id
                               LEFT JOIN documents d ON d.id=e.document_id WHERE e.status='active' AND p.relevance='investment'""")
-        scored = []
+        scored, dropped, invalid = [], 0, 0
         for r in rows:
             m = loads(r["metrics"], {}) or {}
             t = abs(m.get("t_stat", 0) or 0)
             p = m.get("p_value")
-            strength = max(t, 2.0 if (p is not None and p < 0.05) else 0, (m.get("ic", 0) or 0) * 30)
-            if strength <= 0:
+            name = (r["name"] or "").lower()
+            if re.search(r"\b(invalid|bug|wrong|superseded|discarded|error in)\b", name):
+                invalid += 1                # the author marked this result as not to be used
                 continue
-            scored.append((strength * (1.3 if r["oos"] else 0.8) * (0.5 if r["result_kind"] == "synthetic_demo" else 1.0), r, m))
-        by_proj = defaultdict(list)
-        for s, r, m in scored:
-            by_proj[r["pname"]].append((s, r, m))
-        ranked = sorted(by_proj.items(), key=lambda kv: -max(x[0] for x in kv[1]))
-        ev, lines = [], ["Projects ranked by their strongest extracted statistical result (t-stat / p-value / IC; out-of-sample weighted up, "
-                         "synthetic data down):"]
-        for pname, items in ranked[:10]:
-            s, r, m = max(items, key=lambda x: x[0])
-            ms = ", ".join(f"{k} {v:g}" for k, v in m.items() if k in ("t_stat", "p_value", "ic", "sharpe", "alpha", "hit_rate", "brier"))
-            txt = f"{pname}: {truncate(r['name'], 150)} [{ms}] {'OOS' if r['oos'] else 'in-sample/unclear'}; {len(items)} significant-ish results"
-            lines.append("- " + txt + " " + self._cite(ev, _ev("experiment", txt, project=r["slug"], title=r["title"], url=r["url"],
-                                                                path=r["path"] or r["location"], line=r["line"], claim_type="model_estimate", id=r["id"])))
-        return {"answer": "\n".join(lines), "evidence": ev,
-                "notes": ["Usefulness is proxied by statistical strength; it is not a measure of economic value."]}
+            if t > 25:                      # beyond what a predictive test in these projects produces: a parse slip or a level regression
+                dropped += 1
+                continue
+            if r["oos"] and (m.get("r2") is not None and m["r2"] < 0):
+                continue                    # a negative out-of-sample R² is a failed forecast whatever the in-sample p-value says
+            strength = max(min(t, 12), 2.0 if (p is not None and p < 0.05) else 0, min(abs(m.get("ic", 0) or 0), 0.3) * 30)
+            if strength < 2.0:              # not significant: not a predictive result worth ranking
+                continue
+            weight = 0.5 if r["result_kind"] == "synthetic_demo" else 1.0
+            weight *= 0.6 if re.search(r"exploratory|not pre-?registered", name) else 1.0
+            weight *= 1.2 if (r["result_kind"] == "forecast_evaluation" or "ic" in m or "brier" in m or "hit_rate" in m) else 1.0
+            scored.append((strength * weight, r, m))
+        ev, lines = [], ["Predictive evidence means out-of-sample tests, so those come first; in-sample results are listed separately "
+                         "because a strong in-sample statistic is not evidence that a forecast works."]
+
+        def best_per_project(items):
+            by = defaultdict(list)
+            for s, r, m in items:
+                by[r["pname"]].append((s, r, m))
+            return sorted(((k, max(v, key=lambda x: x[0]), len(v)) for k, v in by.items()), key=lambda kv: -kv[1][0])
+
+        for label, items, n_show in (("Out-of-sample", [x for x in scored if x[1]["oos"]], 8),
+                                     ("In-sample or unclear (not evidence of prediction)", [x for x in scored if not x[1]["oos"]], 4)):
+            ranked = best_per_project(items)
+            if not ranked:
+                continue
+            lines.append(f"\n**{label}**")
+            for pname, (s, r, m), n in ranked[:n_show]:
+                ms = ", ".join(f"{k} {v:g}" for k, v in m.items() if k in ("t_stat", "p_value", "ic", "sharpe", "alpha", "hit_rate", "brier"))
+                txt = f"{pname}: {truncate(r['name'], 150)} [{ms}]; {n} significant result{'s' if n != 1 else ''} in this group"
+                lines.append("- " + txt + " " + self._cite(ev, _ev("experiment", txt, project=r["slug"], title=r["title"], url=r["url"],
+                                                                    path=r["path"] or r["location"], line=r["line"], claim_type="model_estimate", id=r["id"])))
+        notes = ["Strength = the result's t-stat (capped at 12), p < 0.05, or IC; forecast evaluations weighted up, exploratory and "
+                 "synthetic results down. It is a statistical ranking, not a measure of economic value."]
+        if invalid:
+            notes.append(f"{invalid} results the author labelled invalid, buggy or superseded were left out.")
+        if dropped:
+            notes.append(f"{dropped} results with |t| > 25 were left out as implausible for a predictive test.")
+        return {"answer": "\n".join(lines), "evidence": ev, "notes": notes}
 
     def h_search(self, q, ents):
         ps = self._passages(q, 10)

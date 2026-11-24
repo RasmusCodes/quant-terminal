@@ -87,11 +87,21 @@ def _flatten(d, prefix="", depth=0, out=None):
     return out
 
 
+LIMITS = {"t_stat": (-40, 40), "p_value": (0, 1), "sharpe": (-8, 15), "ic": (-1, 1), "hit_rate": (0, 100), "r2": (-5, 1),
+          "brier": (0, 1), "auc": (0, 1), "accuracy": (0, 100), "corr": (-1, 1)}
+
+
+def plausible_metric(name: str, v: float) -> bool:
+    """Reject values that cannot be the named statistic (a parsing slip, not a result)."""
+    lo, hi = LIMITS.get(name, (float("-inf"), float("inf")))
+    return lo <= v <= hi
+
+
 def _metrics_from_flat(flat: dict) -> dict:
     metrics = {}
     for k, v in flat.items():
         name = C.metric_name(k.split(".")[-1])
-        if name and name not in metrics:
+        if name and name not in metrics and plausible_metric(name, v):
             metrics[name] = v
     return metrics
 
@@ -159,7 +169,7 @@ def _from_csv(rel: str, raw: str, stem: str, delim: str) -> list[Experiment]:
         metrics = {}
         for i, n in mcols.items():
             v = C.to_float(r[i])
-            if v is not None and n not in metrics:
+            if v is not None and n not in metrics and plausible_metric(n, v):
                 metrics[n] = v
         if len([k for k in metrics if k not in ("n_obs", "volatility", "corr", "beta")]) >= 1 and len(metrics) >= 2:
             out.append(Experiment(name=f"{stem}: {r[label_col]}", source_kind="results_file", metrics=metrics, location=rel, variant_of=stem))
@@ -182,7 +192,7 @@ def from_markdown_tables(text: str, rel: str, max_tables: int = 40, max_rows: in
             heading = hm.group(1).strip()
         if TABLE_ROW.match(line) and i + 1 < len(lines) and re.match(r"^\s*\|?\s*:?-{2,}", lines[i + 1]):
             header = [c.strip() for c in TABLE_ROW.match(line).group(1).split("|")]
-            mcols = {j: C.metric_name(_strip_unit(h)) for j, h in enumerate(header) if C.metric_name(_strip_unit(h))}
+            mcols = {j: C.metric_name(_strip_unit(h), table=True) for j, h in enumerate(header) if C.metric_name(_strip_unit(h), table=True)}
             j = i + 2
             body = []
             while j < len(lines) and TABLE_ROW.match(lines[j]):
@@ -197,7 +207,7 @@ def from_markdown_tables(text: str, rel: str, max_tables: int = 40, max_rows: in
                     metrics = {}
                     for k, n in mcols.items():
                         v = C.to_float(re.sub(r"[*_`]", "", cells[k]).split(" ")[0])
-                        if v is not None and n not in metrics:
+                        if v is not None and n not in metrics and plausible_metric(n, v):
                             metrics[n] = v
                     label = re.sub(r"[*_`]", "", cells[0]) or f"row {ln}"
                     if metrics:

@@ -24,7 +24,7 @@ from .taxonomy import Taxonomy
 from .textproc import Parsed
 from .util import HttpClient, dumps, log, now_iso, read_text, sha1, slugify
 
-EXTRACTOR_VERSION = "2026-11-21.5"
+EXTRACTOR_VERSION = "2026-11-23.1"
 
 
 class SyncLocked(RuntimeError):

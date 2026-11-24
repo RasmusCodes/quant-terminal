@@ -20,7 +20,7 @@ VERIFIED = re.compile(
     r"match(?:es|ed)?\s+(?:[\w\s'-]{0,40})?(?:exactly|to\s+(?:the\s+)?(?:cent|0\.\d+|within))|"
     r"\b0\s+(?:false fills|inconsistencies|mismatches|errors)|agree[sd]?\s+with\s+[\w\s'-]{0,40}to\s+(?:within|0\.\d))", re.I)
 OBSERVED = re.compile(
-    r"(\breported\b|\breports that\b|\bthe company reports\b|\bfiled\b|\bdisclos\w*|\baccording to\b|\bper (?:the )?(?:10-k|10-q|8-k|filing|company)\b|"
+    r"(\breported\b|\breports that\b|\bthe company reports\b|\bfiled\b|\bdisclosed\b|\baccording to\b|\bper (?:the )?(?:10-k|10-q|8-k|filing|company)\b|"
     r"\b10-k\b|\b10-q\b|\b8-k\b|\b20-f\b|\bannual report\b|\bearnings release\b|\bpress release\b|\bguided\b|\bguidance (?:of|was|for)\b|"
     r"\bthe company said\b|\bmanagement said\b|\bannounced\b|\bawarded\b|\bcontract (?:worth|valued|for)\b|\bas of \d|"
     r"\bas of (?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\bclosed at\b|\btraded at\b|\bholds? \d|\bowns\b|"
@@ -68,11 +68,17 @@ class Finding:
     themes: list = field(default_factory=list)
 
 
+SOURCE_TAG = re.compile(r"\[(?:[A-Z]{1,4}[-:]\s?[A-Za-z0-9][^\]]{1,50}|S\d{1,3}|F:\s?[^\]]{2,50})\]")   # e.g. [D-COHR-2026-02], [F: 10-K Note 30], [S34]
+
+
 def classify_statement(text: str) -> tuple[str, str, float]:
     if VERIFIED.search(text):
         return "verified_result", "verified:" + VERIFIED.search(text).group(0)[:40], 0.7
     has_model = MODEL.search(text)
     has_obs = OBSERVED.search(text)
+    tag = SOURCE_TAG.search(text)
+    if tag and not re.search(r"\b(estimat\w*|forecast\w*|model\w*|we expect|scenario|base case|bear case|bull case)\b", text, re.I):
+        return "observed_fact", "source-tag:" + tag.group(0)[:30], 0.65      # a statement carrying its own source citation
     if has_obs and not has_model:
         return "observed_fact", "observed:" + has_obs.group(0)[:40], 0.65
     if has_model:

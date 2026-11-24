@@ -18,6 +18,22 @@ def test_metric_names():
     assert C.metric_name("t-stat") == "t_stat"
     assert C.metric_name("max_dd") == "max_drawdown"
     assert C.metric_name("ticker") is None
+    # bare one-letter names: a sample length or a time index in files, a statistic only as a lower-case table header
+    assert C.metric_name("T") == "n_obs" and C.metric_name("t") is None and C.metric_name("t", table=True) == "t_stat"
+    assert C.metric_name("p") is None and C.metric_name("p", table=True) == "p_value"
+
+
+def test_implausible_metrics_rejected():
+    exps, _ = X.from_results_file("results/summary.json", "json", '{"name": "x", "t": 3916, "T": 240, "sharpe": 0.4, "t_stat": 2.2}')
+    assert exps[0].metrics == {"sharpe": 0.4, "t_stat": 2.2, "n_obs": 240.0}
+    exps2, _ = X.from_results_file("results/summary.json", "json", '{"name": "x", "t_stat": 188, "sharpe": 0.4, "alpha": 0.05}')
+    assert "t_stat" not in exps2[0].metrics
+
+
+def test_source_tag_statements_are_observed():
+    ct, rule, _ = F.classify_statement("NVIDIA also bought 7.79m new COHR shares at $256.80 for $2.0bn [D-COHR-2026-02].")
+    assert ct == "observed_fact" and rule.startswith("source-tag")
+    assert F.classify_statement("Our base case estimate is $120 [F: 10-K Note 30].")[0] == "model_estimate"
 
 
 def test_claim_types():
