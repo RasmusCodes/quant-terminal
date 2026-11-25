@@ -136,12 +136,22 @@ function openExperiment(e) {
     <p class="note">Heuristic flags are prompts to check, not verdicts. Nothing is computed that the source does not state.</p>`);
 }
 
+// Model registry rows: a run family shows how many runs and the dimensions that vary across them (agents × windows × seeds).
+function runsCell(m) {
+  const meta = m.meta || {};
+  if (!meta.runs) return "";
+  const dims = (meta.facets || []).filter((f) => f.n > 1).map((f) => (f.n <= 4 ? f.values.join("/") : `${f.n} × ${f.values[0]}…`));
+  return `${fmt(meta.runs, "int")} runs${dims.length ? ` <span class="muted">${esc(dims.join(" · "))}</span>` : ""}`;
+}
+const modelCols = [{ key: "name", label: "Folder", render: (m) => `<span class="mono">${esc(m.name)}</span>${(m.meta || {}).archived ? ' <span class="badge">archived</span>' : ""}` }, { key: "kind", label: "Kind" },
+  { key: "runs", label: "Runs", render: runsCell }, { key: "artifacts", label: "Files", num: true }, { key: "modified", label: "Updated", render: (m) => date(m.modified) }];
+
 function alertsList(alerts, { actions = !STATIC } = {}) {
   if (!alerts.length) return '<div class="empty">No alerts.</div>';
   return alerts.map((a) => `<div class="alert ${esc(a.severity)}" data-id="${a.id}">
     <div class="flex space"><span class="t">${esc(a.title)}</span><span class="badge">${esc(a.basis.replace("_", " "))}</span></div>
     <div class="m">${esc(a.kind.replace("_", " "))} · ${esc(ago(a.created_at))} · ${esc(a.status)}</div>
-    <div class="dtl">${esc(a.detail)}</div>
+    <div class="dtl">${esc(a.detail)}${/^https:\/\//.test((a.subjects || {}).url || "") ? ` <a href="${esc(a.subjects.url)}" target="_blank" rel="noopener">open ↗</a>` : ""}</div>
     ${actions ? `<div class="acts"><button class="btn ghost" data-st="seen">Seen</button><button class="btn ghost" data-st="dismissed">Dismiss</button><button class="btn ghost" data-st="resolved">Resolved</button></div>` : ""}</div>`).join("");
 }
 function wireAlerts(root) {
@@ -244,9 +254,9 @@ async function quant() {
     { key: "costs_modeled", label: "Costs", render: (s) => (s.costs_modeled ? "modelled" : "–") }, { key: "first_date", label: "From", render: (s) => date(s.first_date) },
     { key: "last_date", label: "To", render: (s) => date(s.last_date) }, { key: "description", label: "Description", render: (s) => `<span class="clip">${esc(s.description || "")}</span>` }],
     { empty: "No strategy registry files found." }), { cls: "c12", flush: true, scroll: true });
-  html += panel("Model registry (saved artefacts)", table(d.ml_models || [], [{ key: "project", label: "Project" }, { key: "name", label: "Folder", render: (m) => `<span class="mono">${esc(m.name)}</span>` },
-    { key: "kind", label: "Kind" }, { key: "artifacts", label: "Files", num: true }, { key: "modified", label: "Updated", render: (m) => date(m.modified) }],
-    { empty: "No saved model files found." }), { cls: "c12", flush: true, scroll: true });
+  html += panel("Model registry (saved artefacts)", table(d.ml_models || [], [{ key: "project", label: "Project" }, ...modelCols],
+    { empty: "No saved model files found." }) + `<p class="note">Weight files (.pt, .onnx, …) always count; pickles and arrays only where the path names a model, since most are data caches or backtest results. Run folders of one experiment are one row.</p>`,
+    { cls: "c12", flush: true, scroll: true });
   html += panel("Signal registry", signalTable(d.signals.registry), { cls: "c12", flush: true, scroll: true });
   html += panel("Projects", projectCards(d.projects), { cls: "c12" });
   main.innerHTML = html + "</div>";
@@ -482,7 +492,7 @@ async function openProject(slug) {
     ${(cls.flags || []).length ? `<h3>Research-practice checks</h3>${cls.flags.map((f) => `<div class="alert ${f.status === "acknowledged" ? "info" : "warning"}"><div class="t">${esc(f.flag.replace(/_/g, " "))} · ${esc(f.status)}</div><div class="dtl">${esc(f.detail)}</div></div>`).join("")}` : ""}
     ${p.theses.length ? `<h3>Theses</h3>${table(p.theses, thesisCols.slice(0, 6), { onRow: openThesis })}` : ""}
     ${p.models.length ? `<h3>Models</h3>${table(p.models, [{ key: "name", label: "Model" }, { key: "model_type", label: "Type" }, { key: "outputs", label: "Outputs", render: (m) => (m.outputs || []).slice(0, 4).map((o) => `<span class="pill mono">${esc(o.key)} ${fmt(o.value, "num", 2)}</span>`).join("") }])}` : ""}
-    ${(p.ml_models || []).length ? `<h3>Saved model artefacts</h3>${table(p.ml_models, [{ key: "name", label: "Folder", render: (m) => `<span class="mono">${esc(m.name)}</span>` }, { key: "kind", label: "Kind" }, { key: "artifacts", label: "Files", num: true }, { key: "modified", label: "Updated", render: (m) => date(m.modified) }])}` : ""}
+    ${(p.ml_models || []).length ? `<h3>Saved model artefacts</h3>${table(p.ml_models, modelCols)}` : ""}
     <h3>Key findings</h3>${table(p.findings.slice(0, 25), findingCols, { empty: "No findings extracted." })}
     ${p.experiments.length ? `<h3>Experiments (${p.experiments.length})</h3>${table(p.experiments, expCols.slice(1), { onRow: openExperiment, max: 80 })}` : ""}
     ${p.companies.length ? `<h3>Companies</h3><div>${p.companies.map((c) => `<a class="pill" href="#/company/${encodeURIComponent(c.symbol)}">${esc(c.symbol)} · ${c.mentions}</a>`).join("")}</div>` : ""}

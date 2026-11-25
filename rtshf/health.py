@@ -44,19 +44,52 @@ def scheduled_task() -> dict:
             "repeat": info.get("Repeat: Every")}
 
 
-def github_actions(owner: str, repo: str = "quant-terminal") -> dict:
+def github_actions(owner: str, repo: str = "quant-terminal", per_page: int = 3) -> dict:
     if not shutil.which("gh"):
         return {"available": False}
     try:
-        p = subprocess.run(["gh", "api", f"repos/{owner}/{repo}/actions/runs?per_page=3"], capture_output=True, text=True, timeout=30)
+        p = subprocess.run(["gh", "api", f"repos/{owner}/{repo}/actions/runs?per_page={per_page}"], capture_output=True, text=True, timeout=30)
         if p.returncode != 0:
             return {"available": True, "configured": False}
         runs = json.loads(p.stdout).get("workflow_runs", [])
         return {"available": True, "configured": True,
-                "runs": [{"name": r["name"], "status": r["status"], "conclusion": r["conclusion"], "event": r["event"],
-                          "created_at": r["created_at"], "url": r["html_url"]} for r in runs]}
+                "runs": [{"id": r["id"], "name": r["name"], "status": r["status"], "conclusion": r["conclusion"], "event": r["event"],
+                          "head_sha": (r.get("head_sha") or "")[:7], "created_at": r["created_at"], "url": r["html_url"]} for r in runs]}
     except Exception as exc:
         return {"available": False, "error": str(exc)}
+
+
+def _failed_step(owner: str, repo: str, run_id: int) -> str | None:
+    try:
+        p = subprocess.run(["gh", "api", f"repos/{owner}/{repo}/actions/runs/{run_id}/jobs"], capture_output=True, text=True, timeout=30)
+        for job in json.loads(p.stdout).get("jobs", []) if p.returncode == 0 else []:
+            for st in job.get("steps") or []:
+                if st.get("conclusion") == "failure":
+                    return st.get("name")
+    except Exception:
+        return None
+    return None
+
+
+def public_build(owner: str, repo: str = "quant-terminal", gh: dict | None = None) -> dict | None:
+    """The public site only changes when its GitHub Actions build passes; a failing build leaves it frozen at the last
+    good one without any visible error. Returns the current failure streak (finished runs since the last success)."""
+    gh = gh if gh is not None else github_actions(owner, repo, per_page=15)
+    runs = [r for r in gh.get("runs") or [] if r["status"] == "completed" and r["conclusion"] not in ("cancelled", "skipped")]
+    if not runs:
+        return None
+    streak = []
+    for r in runs:
+        if r["conclusion"] == "success":
+            break
+        streak.append(r)
+    last_ok = next((r for r in runs if r["conclusion"] == "success"), None)
+    out = {"failing": bool(streak), "failed_runs": len(streak), "latest": runs[0],
+           "last_success": last_ok["created_at"] if last_ok else None}
+    if streak:
+        out |= {"since": streak[-1]["created_at"], "first_failed_id": streak[-1]["id"],
+                "failed_step": _failed_step(owner, repo, streak[0]["id"])}
+    return out
 
 
 def health(db: DB, settings, include_external: bool = True) -> dict:
@@ -92,7 +125,9 @@ def health(db: DB, settings, include_external: bool = True) -> dict:
     }
     if include_external and not settings.is_public:
         out["scheduler"] = scheduled_task()
-        out["github_actions"] = github_actions(settings.owner)
+        gh = github_actions(settings.owner, per_page=15)
+        out["public_build"] = public_build(settings.owner, gh=gh)
+        out["github_actions"] = gh | {"runs": (gh.get("runs") or [])[:3]}
     out["manual_steps"] = manual_steps(db, settings, out)
     return out
 
@@ -103,6 +138,12 @@ def manual_steps(db: DB, settings, h: dict) -> list[dict]:
     sched = h.get("scheduler") or {}
     if sched.get("available") and not sched.get("installed"):
         steps.append({"level": "required", "step": "Install the scheduled sync once: scripts\\install_task.ps1"})
+    pb = h.get("public_build") or {}
+    if pb.get("failing"):
+        at = f" at '{pb['failed_step']}'" if pb.get("failed_step") else ""
+        steps.append({"level": "required", "step": f"Public terminal build failing{at} since {pb['since'][:16].replace('T', ' ')} UTC "
+                                                   f"({pb['failed_runs']} run(s)); the public site stays at the last good build. "
+                                                   f"Log: {pb['latest']['url']}"})
     proposed = db.scalar("SELECT COUNT(*) FROM signal_sources WHERE status='proposed'", default=0)
     if proposed:
         steps.append({"level": "optional", "step": f"Review {proposed} auto-detected signal table(s) in Settings (kept inactive until approved)"})

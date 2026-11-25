@@ -19,12 +19,12 @@ from .connectors import github as GH
 from .connectors import website as WEB
 from .db import DB
 from .entities import build_linker, ensure_theme_entities, load_master
-from .ingest import Ctx, extract_from_text_doc, process_files, remove_document, store_text_document
+from .ingest import Ctx, extract_from_text_doc, process_files, refresh_superseded, remove_document, store_text_document
 from .taxonomy import Taxonomy
 from .textproc import Parsed
 from .util import HttpClient, dumps, log, now_iso, read_text, sha1, slugify
 
-EXTRACTOR_VERSION = "2026-11-23.1"
+EXTRACTOR_VERSION = "2026-11-25.1"
 
 
 class SyncLocked(RuntimeError):
@@ -76,6 +76,10 @@ def run(settings: Settings, trigger: str = "manual", full: bool = False, only: s
     lock = settings.data_dir / "sync.lock"
     _lock(lock)
     db = DB(settings.db_path)
+    # The lock means no other sync is alive, so a row still marked 'running' is a run whose process was killed
+    # (session ended, machine slept or shut down). Its end time is unknown, so finished_at stays empty.
+    db.execute("UPDATE sync_runs SET status='abandoned', error=COALESCE(error, 'process ended before the run finished') "
+               "WHERE status='running'")
     started = time.time()
     run_id = db.insert("sync_runs", {"started_at": now_iso(), "mode": settings.mode, "trigger": trigger, "status": "running"})
     db.commit()
@@ -105,6 +109,7 @@ def run(settings: Settings, trigger: str = "manual", full: bool = False, only: s
                 _stage(ctx, f"github.ingest:{r['key']}", lambda r=r: ingest_github(ctx, r, force))
         if "website" in only:
             _stage(ctx, "website", lambda: sync_website(ctx, site_dir, force))
+        _stage(ctx, "superseded", lambda: refresh_superseded(db))
         # project profiles
         if force:
             ctx.changed_projects |= {r[0] for r in db.all("SELECT id FROM projects")}
@@ -120,6 +125,7 @@ def run(settings: Settings, trigger: str = "manual", full: bool = False, only: s
             return None
         for pid in sorted(ctx.changed_projects | unprofiled):
             _stage(ctx, f"profile:{pid}", lambda pid=pid: classify.profile_project(db, tax, pid, settings.overrides, root_of))
+        _stage(ctx, "model_registry", lambda: classify.refresh_model_registry_all(db))
         _stage(ctx, "theses.status", lambda: refresh_thesis_status(db))
         _stage(ctx, "project_entities", lambda: refresh_project_entities(db))
         _stage(ctx, "relations", lambda: _relations(ctx))

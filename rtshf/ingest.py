@@ -17,7 +17,7 @@ from .extract import theses as T
 from .extract.common import section_role
 from .taxonomy import Taxonomy
 from .textproc import FORMATS, Parsed, chunk_text, parse_file
-from .util import dumps, file_sha1, loads, log, now_iso, read_text, sha1
+from .util import dumps, file_sha1, in_superseded_folder, loads, log, now_iso, read_text, sha1
 
 TEXT_DOC_TYPES_WITH_THESES = {"published_research", "memo", "report", "readme", "deck", "note", "paper", "essay", "doc", "notebook"}
 
@@ -60,7 +60,7 @@ def classify_doc(rel: str, fmt: str, title: str = "") -> tuple[str, bool]:
     low = rel.lower()
     name = low.rsplit("/", 1)[-1]
     parts = low.split("/")[:-1]
-    superseded = any(re.search(r"^(archive|archived|old|deprecated|previous|backup|superseded)$|_v1$|-v1$", p) for p in parts)
+    superseded = in_superseded_folder(low)
     t = (title or "").lower()
     if fmt == "xlsx":
         return "model", superseded
@@ -169,7 +169,26 @@ def purge_document_content(db: DB, doc_id: int) -> None:
     db.execute("DELETE FROM chunks WHERE document_id=?", (doc_id,))
     db.execute("DELETE FROM mentions WHERE document_id=?", (doc_id,))
     db.execute("UPDATE findings SET status='stale' WHERE document_id=? AND status='active'", (doc_id,))
-    db.execute("UPDATE experiments SET status='stale' WHERE document_id=? AND status='active'", (doc_id,))
+    db.execute("UPDATE experiments SET status='stale' WHERE document_id=? AND status IN ('active','superseded')", (doc_id,))
+
+
+def refresh_superseded(db: DB) -> dict:
+    """Old versions (archive/, *_v1/, *_pre_fix/ folders) keep their history but stop counting as current evidence:
+    the document gets the flag and its experiments the status 'superseded'. Runs every sync, both directions."""
+    flipped = 0
+    for d in db.all("""SELECT d.id, d.path, d.superseded FROM documents d JOIN sources s ON s.id=d.source_id
+                       WHERE s.kind != 'website' AND d.status='active'"""):
+        want = int(in_superseded_folder(d["path"] or ""))
+        if want != (d["superseded"] or 0):
+            db.execute("UPDATE documents SET superseded=? WHERE id=?", (want, d["id"]))
+            flipped += 1
+    old = "document_id IN (SELECT id FROM documents WHERE superseded=1)"
+    n_old = db.scalar(f"SELECT COUNT(*) FROM experiments WHERE status='active' AND {old}", default=0)
+    n_back = db.scalar(f"SELECT COUNT(*) FROM experiments WHERE status='superseded' AND NOT {old}", default=0)
+    db.execute(f"UPDATE experiments SET status='superseded' WHERE status='active' AND {old}")
+    db.execute(f"UPDATE experiments SET status='active' WHERE status='superseded' AND NOT {old}")
+    db.commit()
+    return {"documents_flipped": flipped, "experiments_superseded": n_old, "experiments_restored": n_back}
 
 
 def finalize_document(db: DB, doc_id: int) -> None:
@@ -439,11 +458,11 @@ def _ingest_result(ctx: Ctx, source, project_id, root: Path, e: FileEntry, h: st
         doc = db.one("SELECT id FROM documents WHERE source_id=? AND path=?", (source["id"], e.rel))
         row = {"source_id": source["id"], "project_id": project_id, "path": e.rel, "url": url, "title": e.rel.rsplit("/", 1)[-1],
                "doc_type": "result", "fmt": e.fmt, "size": e.size, "content_hash": h, "visibility": visibility,
-               "last_seen": now_iso(), "status": "active", "text_len": 0}
+               "superseded": int(in_superseded_folder(e.rel)), "last_seen": now_iso(), "status": "active", "text_len": 0}
         if doc:
             doc_id = doc["id"]
             db.update("documents", doc_id, row)
-            db.execute("UPDATE experiments SET status='stale' WHERE document_id=? AND status='active'", (doc_id,))
+            db.execute("UPDATE experiments SET status='stale' WHERE document_id=? AND status IN ('active','superseded')", (doc_id,))
         else:
             row["first_seen"] = now_iso()
             doc_id = db.insert("documents", row)

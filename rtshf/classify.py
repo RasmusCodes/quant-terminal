@@ -14,7 +14,7 @@ from pathlib import Path
 from .db import DB
 from .extract import experiments as X
 from .taxonomy import Taxonomy
-from .util import dumps, loads, now_iso, read_text
+from .util import dumps, in_superseded_folder, loads, now_iso, read_text
 
 INVEST_MIN = 7.0          # minimum investment-category score to count as investment research
 GAME_MIN = 4.0
@@ -209,38 +209,95 @@ def profile_project(db: DB, tax: Taxonomy, project_id: int, overrides: dict, roo
     if ov or manifest:
         fields["override"] = dumps({**({"manifest": manifest} if manifest else {}), **ov})
     db.update("projects", project_id, fields)
-    refresh_model_registry(db, project_id, proj["slug"])
     _contextualise_result_experiments(db, project_id, readme_text + "\n" + report_text, flags)
     db.commit()
     return fields
 
 
-ARTIFACT_KIND = {".pt": "PyTorch weights", ".pth": "PyTorch weights", ".pkl": "pickled model/object", ".joblib": "joblib model",
-                 ".onnx": "ONNX model", ".npz": "NumPy arrays", ".h5": "HDF5/Keras", ".cbm": "CatBoost model", ".lgb": "LightGBM model"}
+ARTIFACT_KIND = {".pt": "PyTorch checkpoint", ".pth": "PyTorch checkpoint", ".onnx": "ONNX model", ".cbm": "CatBoost model",
+                 ".lgb": "LightGBM model", ".pkl": "pickled model", ".joblib": "joblib model", ".npz": "NumPy model arrays",
+                 ".h5": "HDF5/Keras model"}
+WEIGHT_FORMATS = {".pt", ".pth", ".onnx", ".cbm", ".lgb"}          # formats that only ever hold model weights
+# .pkl/.joblib/.npz/.h5 hold data caches and backtest result objects at least as often as fitted models, so they count
+# only when the path itself says "model". ("weights" is left out: in this workspace it usually means portfolio weights.)
+MODEL_WORD = re.compile(r"(?<![a-z])(models?|checkpoints?|ckpts?|estimators?|fitted|trained|classifiers?|clf|regressors?|"
+                        r"polic(?:y|ies)|agents?|boosters?|scalers?|encoders?|vectori[sz]ers?|tokeni[sz]ers?)(?![a-z])")
+DATA_WORD = re.compile(r"(?<![a-z])(inputs?|data(?:set)?|panel|features?|cache|chunks?|prices|returns|events|filings|vintages|"
+                       r"quotes|trades|logs?|results?|selections?|state)(?![a-z])")
+RUN_FAMILY_MIN = 3        # this many sibling folders with the same kind of file = one experiment's runs, not separate models
+
+
+def is_model_artifact(path: str) -> bool:
+    ext = Path(path).suffix.lower()
+    if ext not in ARTIFACT_KIND:
+        return False
+    if ext in WEIGHT_FORMATS:
+        return True
+    low = path.lower().replace("\\", "/")
+    return bool(MODEL_WORD.search(low)) and not DATA_WORD.search(Path(low).stem)
+
+
+def run_facets(names: list[str]) -> list[dict]:
+    """'a2c__wf1_2018__s0' style run names -> the distinct values at each position (agents, windows, seeds, ...)."""
+    parts = [n.split("__") for n in names]
+    width = Counter(len(p) for p in parts).most_common(1)[0][0] if parts else 0
+    if width < 2:
+        return []
+    cols = [sorted({p[i] for p in parts if len(p) == width}) for i in range(width)]
+    return [{"n": len(c), "values": c[:8]} for c in cols]
 
 
 def refresh_model_registry(db: DB, project_id: int, slug: str) -> int:
-    """Group saved model artifacts by folder and type into model-registry entries (one row per folder and kind)."""
-    import datetime as dt
-    groups: dict = {}
+    """Saved model files -> model-registry entries: one per folder and file type, with the run folders of one
+    experiment (3+ siblings, e.g. runs/controls/<agent>__<window>__<seed>/model.pt) collapsed into one entry."""
+    def blank():
+        return {"n": 0, "size": 0, "mtime": 0.0, "examples": [], "runs": []}
+
+    leaves: dict = {}
     for f in db.all("""SELECT f.path, f.size, f.mtime FROM file_index f JOIN sources s ON s.id=f.source_id
-                       WHERE s.project_id=? AND f.role='artifact' AND f.status='active'""", (project_id,)):
+                       WHERE s.project_id=? AND f.role='artifact' AND f.status='active' ORDER BY f.path""", (project_id,)):
+        if not is_model_artifact(f["path"]):
+            continue
         folder, _, name = f["path"].rpartition("/")
-        ext = Path(name).suffix.lower()
-        top = "/".join(folder.split("/")[:3]) or "."
-        g = groups.setdefault((top, ext), {"n": 0, "size": 0, "mtime": 0.0, "examples": []})
+        g = leaves.setdefault((folder, Path(name).suffix.lower()), blank())
         g["n"] += 1
         g["size"] += f["size"] or 0
         g["mtime"] = max(g["mtime"], f["mtime"] or 0)
-        if len(g["examples"]) < 3:
-            g["examples"].append(f["path"])
+        g["examples"].append(f["path"])
+    siblings = Counter((folder.rpartition("/")[0], ext) for folder, ext in leaves if "/" in folder)
+    groups: dict = {}
+    for (folder, ext), g in leaves.items():
+        parent, _, leaf = folder.rpartition("/")
+        if parent and siblings[(parent, ext)] >= RUN_FAMILY_MIN:
+            tgt = groups.setdefault((parent, ext), blank())
+            tgt["runs"].append(leaf)
+        else:
+            tgt = groups.setdefault((folder or ".", ext), blank())
+        tgt["n"] += g["n"]
+        tgt["size"] += g["size"]
+        tgt["mtime"] = max(tgt["mtime"], g["mtime"])
+        tgt["examples"] += g["examples"][: max(0, 3 - len(tgt["examples"]))]
+    first_seen = {r["key"]: r["first_seen"] for r in db.all("SELECT key, first_seen FROM models WHERE project_id=?", (project_id,))}
     db.execute("DELETE FROM models WHERE project_id=?", (project_id,))
     for (folder, ext), g in groups.items():
-        db.insert("models", {"key": f"{slug}:{folder}:{ext}", "project_id": project_id, "kind": ARTIFACT_KIND.get(ext, ext),
-                             "name": folder, "path": folder, "framework": ext.lstrip("."), "artifacts": g["n"],
+        key = f"{slug}:{folder}:{ext}"
+        meta = {"bytes": g["size"], "examples": g["examples"]}
+        if in_superseded_folder(folder + "/"):
+            meta["archived"] = True
+        if g["runs"]:
+            meta |= {"runs": len(g["runs"]), "facets": run_facets(g["runs"])}
+        db.insert("models", {"key": key, "project_id": project_id, "kind": ARTIFACT_KIND[ext], "name": folder, "path": folder,
+                             "framework": ext.lstrip("."), "artifacts": g["n"],
                              "modified": dt.datetime.fromtimestamp(g["mtime"], dt.timezone.utc).replace(microsecond=0).isoformat() if g["mtime"] else None,
-                             "meta": dumps({"bytes": g["size"], "examples": g["examples"]}), "first_seen": now_iso(), "last_seen": now_iso()})
+                             "meta": dumps(meta), "first_seen": first_seen.get(key) or now_iso(), "last_seen": now_iso()})
     return len(groups)
+
+
+def refresh_model_registry_all(db: DB) -> int:
+    """Cheap (one query per project), so it runs on every sync: rule changes apply everywhere without re-extraction."""
+    n = sum(refresh_model_registry(db, p["id"], p["slug"]) for p in db.all("SELECT id, slug FROM projects"))
+    db.commit()
+    return n
 
 
 def _manifest(db: DB, sources, root_of_source) -> dict:

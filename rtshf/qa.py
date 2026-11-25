@@ -401,7 +401,13 @@ class Answerer:
         res = {"answer": "\n".join(lines), "evidence": ev}
         res["notes"] = ["Experiments and their out-of-sample/cost labels are extracted automatically from reports and result files; "
                         "a 'passing' label means the text and numbers meet the rule, not that the result is independently replicated."]
+        res["notes"] += self._superseded_note()
         return res
+
+    def _superseded_note(self) -> list[str]:
+        n = self.db.scalar("""SELECT COUNT(*) FROM experiments e JOIN projects p ON p.id=e.project_id
+                              WHERE e.status='superseded' AND p.relevance='investment'""", default=0)
+        return [f"{n} results kept in archive or older-version folders (archive/, *_v1/, *_pre_fix/) were left out."] if n else []
 
     def h_exposure(self, q, ents):
         from .portfolio import analytics as A
@@ -511,6 +517,7 @@ class Answerer:
             notes.append(f"{invalid} results the author labelled invalid, buggy or superseded were left out.")
         if dropped:
             notes.append(f"{dropped} results with |t| > 25 were left out as implausible for a predictive test.")
+        notes += self._superseded_note()
         return {"answer": "\n".join(lines), "evidence": ev, "notes": notes}
 
     def h_search(self, q, ents):

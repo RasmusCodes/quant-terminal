@@ -105,6 +105,16 @@ def truncate(text: str, n: int) -> str:
     return text if len(text) <= n else text[: n - 1].rstrip() + "…"
 
 
+SUPERSEDED_DIR = re.compile(r"^_?(archive|archived|old|deprecated|previous|backup|superseded)$"
+                            r"|[_-]v1(?:[_-]|$)"                                     # models_v1/, study_v1_pre_fix/
+                            r"|pre[_-](?:\w+[_-])?(?:bug)?fix|before[_-]?fix")       # results kept from before a bug fix
+
+
+def in_superseded_folder(rel: str) -> bool:
+    """True when a folder above the file marks it as old: archive/, _archive/, old/, backup/, models_v1/, *_pre_fix/ ..."""
+    return any(SUPERSEDED_DIR.search(p) for p in rel.lower().replace("\\", "/").split("/")[:-1])
+
+
 def chunks_of(items: list, n: int) -> Iterable[list]:
     for i in range(0, len(items), n):
         yield items[i:i + n]

@@ -70,8 +70,8 @@ class Views:
         d["models"] = rows_to_dicts(self.db.all("SELECT id, name, path, model_type, symbol, outputs, modified FROM financial_models WHERE project_id=?",
                                                 (p["id"],)), ["outputs"])
         d["strategies"] = rows_to_dicts(self.db.all("SELECT key, name, family, description, costs_modeled, first_date, last_date FROM strategies WHERE project_id=?", (p["id"],)))
-        d["ml_models"] = rows_to_dicts(self.db.all("SELECT name, kind, framework, artifacts, modified FROM models WHERE project_id=? ORDER BY artifacts DESC",
-                                                   (p["id"],)))
+        d["ml_models"] = rows_to_dicts(self.db.all("SELECT name, kind, framework, artifacts, modified, meta FROM models WHERE project_id=? ORDER BY artifacts DESC",
+                                                   (p["id"],)), ["meta"])
         d["companies"] = rows_to_dicts(self.db.all("""SELECT e.symbol, e.name, pe.mentions, pe.documents, round(pe.salience,3) AS salience
                                                      FROM project_entities pe JOIN entities e ON e.id=pe.entity_id WHERE pe.project_id=? AND e.kind='company'
                                                      ORDER BY pe.salience DESC LIMIT 25""", (p["id"],)))

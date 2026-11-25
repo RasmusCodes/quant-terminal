@@ -299,4 +299,33 @@ def _system(db: DB, rid: int, settings) -> int:
         n += _alert(db, rid, f"sys:signal:{s['key']}", "integration", "system", "info", f"Signal table found, not activated: {s['path']}",
                     f"A ticker + score table was detected (confidence {s['confidence']}); it is kept as a proposal because the "
                     "mapping is uncertain. Activate it in Settings if it is a real signal.", [], {"signal_source": s["key"]})
+    if not settings.is_public:
+        n += _public_build(db, rid, settings)
     return n
+
+
+def _public_build(db: DB, rid: int, settings) -> int:
+    """Warn when the public terminal's build keeps failing (the site then silently stays at its last good build);
+    close the warning by itself once a build passes again."""
+    from .health import public_build
+    try:
+        b = public_build(settings.owner)
+    except Exception:
+        return 0
+    if not b:
+        return 0
+    if not b["failing"]:
+        db.execute("UPDATE alerts SET status='resolved', updated_at=? WHERE dedupe_key LIKE 'sys:public-build:%' AND status IN ('new','seen')",
+                   (now_iso(),))
+        return 0
+    if b["failed_runs"] < 2:            # a single failure can be a GitHub hiccup; two in a row needs a look
+        return 0
+    at = f" at the step '{b['failed_step']}'" if b.get("failed_step") else ""
+    last_ok = (b["last_success"] or "unknown")[:16].replace("T", " ")
+    privacy = (" A failed export step means the privacy scan found text it will not publish; the run log lists each hit."
+               if "export" in (b.get("failed_step") or "").lower() else "")
+    return _alert(db, rid, f"sys:public-build:{b['first_failed_id']}", "integration", "system", "warning",
+                  f"Public terminal build failing ({b['failed_runs']} runs in a row)",
+                  f"The GitHub Actions build has failed{at} since {b['since'][:16].replace('T', ' ')} UTC. The public site stays at the "
+                  f"last good build ({last_ok} UTC) until a run passes.{privacy}", [],
+                  {"source": "github-actions", "url": b["latest"]["url"]})

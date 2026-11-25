@@ -45,15 +45,18 @@ def test_github_slug():
 def test_privacy_scan(tmp_path):
     out = tmp_path / "site"
     _touch(out / "data" / "a.json", '{"path": "C:\\\\Users\\\\someone\\\\Documents\\\\proj\\\\x"}')
-    _touch(out / "data" / "b.json", '{"note": "contact me at someone@example.com"}')
+    _touch(out / "data" / "b.json", '{"note": "contact me at someone@acme-mail.co"}')
+    _touch(out / "data" / "e.json", '{"note": "placeholder you@example.com.evil.co"}')
     _touch(out / "data" / "c.json", '{"repo": "secret-project"}')
     _touch(out / "data" / "d.json", '{"url": "https://github.com/RasmusCodes/garden"}')
     _touch(out / "data" / "ok.json", '{"repo": "hft-sim", "text": "garden notes and a kitchen page", '
-                                     '"author": "95073323+RasmusCodes@users.noreply.github.com"}')
+                                     '"author": "95073323+RasmusCodes@users.noreply.github.com", '
+                                     '"ua": "SEC_UA=\'Your Name you@example.com\'", "dev": "admin@staging.test"}')
     hits = scan(out, {"secret-project", "garden", "kitchen"})
     kinds = {(h["file"].replace("\\", "/"), h["pattern"]) for h in hits}
     assert ("data/a.json", "windows_path") in kinds
     assert ("data/b.json", "email") in kinds
+    assert ("data/e.json", "email") in kinds                       # a reserved name inside a real domain is not reserved
     assert ("data/c.json", "private_repo_name") in kinds
     assert ("data/d.json", "private_repo_name") in kinds          # a link to a private repo is caught even for common words
     assert not any(h["file"].endswith("ok.json") for h in hits)     # the common words themselves are not

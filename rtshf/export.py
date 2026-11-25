@@ -30,6 +30,9 @@ SCAN_PATTERNS = {
     "broker_account": re.compile(r"(salkkunro|account number|tilinumero)\s*[:#]?\s*\d{6,}", re.I),
 }
 EMAIL_OK: set[str] = set()
+# Reserved documentation domains (RFC 2606 / RFC 6761) belong to nobody, so placeholders such as you@example.com in a
+# public README pass; every other address still fails the build.
+RESERVED_EMAIL = re.compile(r"@(?:[a-z0-9-]+\.)*(?:example\.(?:com|net|org)|example|test|invalid|localhost)$")
 
 
 def _write(path: Path, data) -> None:
@@ -71,7 +74,8 @@ def scan(out: Path, deny: set[str], owner: str = "RasmusCodes") -> list[dict]:
         for name, rx in SCAN_PATTERNS.items():
             for m in rx.finditer(text):
                 val = m.group(0)
-                if name == "email" and (val.lower() in EMAIL_OK or val.lower().endswith((".png", ".jpg", ".svg"))):
+                if name == "email" and (val.lower() in EMAIL_OK or val.lower().endswith((".png", ".jpg", ".svg"))
+                                        or RESERVED_EMAIL.search(val.lower())):
                     continue
                 hits.append({"file": str(p.relative_to(out)), "pattern": name, "match": val[:60]})
                 break
