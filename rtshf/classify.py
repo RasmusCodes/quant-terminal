@@ -244,7 +244,7 @@ def run_facets(names: list[str]) -> list[dict]:
     if width < 2:
         return []
     cols = [sorted({p[i] for p in parts if len(p) == width}) for i in range(width)]
-    return [{"n": len(c), "values": c[:8]} for c in cols]
+    return [{"n": len(c), "values": c[:8], "last": c[-1]} for c in cols]
 
 
 def refresh_model_registry(db: DB, project_id: int, slug: str) -> int:

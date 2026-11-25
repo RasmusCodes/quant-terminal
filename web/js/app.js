@@ -140,7 +140,7 @@ function openExperiment(e) {
 function runsCell(m) {
   const meta = m.meta || {};
   if (!meta.runs) return "";
-  const dims = (meta.facets || []).filter((f) => f.n > 1).map((f) => (f.n <= 4 ? f.values.join("/") : `${f.n} × ${f.values[0]}…`));
+  const dims = (meta.facets || []).filter((f) => f.n > 1).map((f) => (f.n <= 4 ? f.values.join("/") : `${f.values[0]} … ${f.last || f.values[f.values.length - 1]} (${f.n})`));
   return `${fmt(meta.runs, "int")} runs${dims.length ? ` <span class="muted">${esc(dims.join(" · "))}</span>` : ""}`;
 }
 const modelCols = [{ key: "name", label: "Folder", render: (m) => `<span class="mono">${esc(m.name)}</span>${(m.meta || {}).archived ? ' <span class="badge">archived</span>' : ""}` }, { key: "kind", label: "Kind" },
